@@ -1,0 +1,6 @@
+{
+  "name": "USS Enterprise NCC-1701 Flight & Exploration Simulator",
+  "description": "Complete interactive 3D simulation of Star Trek's flagship USS Enterprise NCC-1701. Fly through deep space, engage warp drive, switch cinematic camera angles, inspect ship decks and subsystems, fire phasers and photon torpedoes, and manage LCARS tactical controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
