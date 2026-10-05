@@ -28,7 +28,7 @@ export interface SpaceEnvironment {
     warpFactor: number,
     shipPosition: THREE.Vector3,
     onCheckTorpedoHit?: (pos: THREE.Vector3, prevPos: THREE.Vector3) => boolean,
-    getLiveTargetPos?: (enemyId: string) => THREE.Vector3 | null
+    getLiveTargetPos?: (enemyId?: string | null, currentPos?: THREE.Vector3) => THREE.Vector3 | null
   ) => void;
   firePhasers: (fromLeft: THREE.Vector3, fromRight: THREE.Vector3, targetPos: THREE.Vector3 | null, forwardDir: THREE.Vector3) => void;
   stopPhasers: () => void;
@@ -343,7 +343,7 @@ export function buildSpaceEnvironment(scene: THREE.Scene): SpaceEnvironment {
     warpFactor: number,
     shipPosition: THREE.Vector3,
     onCheckTorpedoHit?: (pos: THREE.Vector3, prevPos: THREE.Vector3) => boolean,
-    getLiveTargetPos?: (enemyId: string) => THREE.Vector3 | null
+    getLiveTargetPos?: (enemyId?: string | null, currentPos?: THREE.Vector3) => THREE.Vector3 | null
   ) => {
     // Rotate celestial bodies gently
     for (const [, mesh] of targetMeshes) {
@@ -385,12 +385,15 @@ export function buildSpaceEnvironment(scene: THREE.Scene): SpaceEnvironment {
       const prevPos = p.prevPosition.clone();
       p.prevPosition.copy(p.mesh.position);
 
-      // LIVE Dynamic homing tracking the target enemy ship!
-      if (p.targetEnemyId && getLiveTargetPos) {
-        const livePos = getLiveTargetPos(p.targetEnemyId);
+      // LIVE Dynamic homing tracking the target enemy ship or proximity target!
+      if (getLiveTargetPos) {
+        const livePos = getLiveTargetPos(p.targetEnemyId, p.mesh.position);
         if (livePos) {
           const toTarget = livePos.clone().sub(p.mesh.position).normalize();
-          p.velocity.lerp(toTarget.multiplyScalar(300), delta * 6.5);
+          p.velocity.lerp(toTarget.multiplyScalar(320), delta * 7.5);
+        } else if (p.targetStaticPos) {
+          const toTarget = p.targetStaticPos.clone().sub(p.mesh.position).normalize();
+          p.velocity.lerp(toTarget.multiplyScalar(280), delta * 5.0);
         }
       } else if (p.targetStaticPos) {
         const toTarget = p.targetStaticPos.clone().sub(p.mesh.position).normalize();

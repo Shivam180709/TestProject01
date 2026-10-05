@@ -23,6 +23,7 @@ import { NavigationConsole } from './components/NavigationConsole';
 import { TacticalRadar } from './components/TacticalRadar';
 import { ControlsHelpModal } from './components/ControlsHelpModal';
 import { TacticalLogConsole, TacticalHUDTicker } from './components/TacticalLogConsole';
+import { EnterpriseDestructionModal } from './components/EnterpriseDestructionModal';
 
 export default function App() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -106,6 +107,8 @@ export default function App() {
         setIsLogConsoleOpen((prev) => !prev);
       } else if (e.key === 'r' || e.key === 'R') {
         setIsRadarScannerOpen((prev) => !prev);
+      } else if (e.key === 'g' || e.key === 'G') {
+        engineRef.current?.cycleAlertLevel();
       }
     };
     window.addEventListener('keydown', handleGlobalKey);
@@ -196,6 +199,27 @@ export default function App() {
     engineRef.current?.summonHostileFleet();
   }, []);
 
+  const handleRestartSimulation = useCallback((retryCurrentWave?: boolean) => {
+    engineRef.current?.restartSimulation(retryCurrentWave);
+    if (!retryCurrentWave) {
+      setEnemies([]);
+    } else if (engineRef.current) {
+      setEnemies(engineRef.current.getEnemyFleet());
+    }
+  }, []);
+
+  const handleZoomIn = useCallback(() => {
+    engineRef.current?.zoomIn();
+  }, []);
+
+  const handleZoomOut = useCallback(() => {
+    engineRef.current?.zoomOut();
+  }, []);
+
+  const handleResetZoom = useCallback(() => {
+    engineRef.current?.resetZoom();
+  }, []);
+
   const handleToggleCombatAssist = useCallback(() => {
     engineRef.current?.toggleCombatAssist();
     setCombatAssist((prev) => !prev);
@@ -274,7 +298,6 @@ export default function App() {
         onFireTorpedo={handleFireTorpedo}
         onToggleShields={handleToggleShields}
         onToggleAutoPilot={handleToggleAutoPilot}
-        onOpenNavigation={() => setIsNavigationOpen(true)}
         onTargetHostile={handleTargetHostile}
         onEnterWarZone={handleEnterWarZone}
         onSummonHostiles={handleSummonHostiles}
@@ -282,8 +305,9 @@ export default function App() {
         onToggleCombatAssist={handleToggleCombatAssist}
         onTriggerBoost={handleTriggerBoost}
         onToggleTacticalLog={() => setIsLogConsoleOpen((prev) => !prev)}
-        onToggleTacticalScanner={() => setIsRadarScannerOpen((prev) => !prev)}
-        isTacticalScannerOpen={isRadarScannerOpen}
+        onZoomIn={handleZoomIn}
+        onZoomOut={handleZoomOut}
+        onResetZoom={handleResetZoom}
       />
 
       {/* Solar Systems & Auto-Course Navigation Console */}
@@ -333,6 +357,15 @@ export default function App() {
         isDocked={isLogDocked}
         onToggleDock={() => setIsLogDocked((prev) => !prev)}
       />
+
+      {/* Enterprise Catastrophic Destruction & Mission Restart Modal */}
+      {shipState?.isDestroyed && (
+        <EnterpriseDestructionModal
+          defeatStats={shipState.defeatStats}
+          progression={shipState.progression}
+          onRestart={handleRestartSimulation}
+        />
+      )}
     </div>
   );
 }

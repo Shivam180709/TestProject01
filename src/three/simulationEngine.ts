@@ -10,6 +10,7 @@ import {
   CoursePlot,
   EnemyShipState,
   TacticalLogEvent,
+  DefeatStats,
 } from '../types/simulation';
 import { buildEnterpriseModel, EnterpriseComponents } from './shipModel';
 import { buildSpaceEnvironment, SpaceEnvironment } from './spaceScene';
@@ -58,6 +59,7 @@ export class SimulationEngine {
   private rollRate: number = 0;
   private flightAssist: boolean = true;
   private combatAssist: boolean = true;
+  private cameraZoom: number = 1.0; // 0.4 (close) to 2.5 (wide tactical overview)
 
   // Engine & Warp State
   private throttlePercent: number = 25; // Default 1/4 impulse
@@ -70,6 +72,8 @@ export class SimulationEngine {
   private shieldsRaised: boolean = true;
   private shieldIntegrity: number = 100;
   private hullIntegrity: number = 100;
+  private isDestroyed: boolean = false;
+  private defeatStats?: DefeatStats;
   private lastDamageTime: number = 0;
   private isUnderAttack: boolean = false;
   private isFiringPhasers: boolean = false;
@@ -223,6 +227,14 @@ export class SimulationEngine {
       this.firePhotonTorpedo();
     } else if (e.code === 'KeyC') {
       this.cycleCameraView();
+    } else if (e.code === 'KeyG') {
+      this.cycleAlertLevel();
+    } else if (e.code === 'Equal' || e.code === 'NumpadAdd') {
+      this.zoomIn();
+    } else if (e.code === 'Minus' || e.code === 'NumpadSubtract') {
+      this.zoomOut();
+    } else if (e.code === 'Digit0' || e.code === 'Numpad0') {
+      this.resetZoom();
     } else if (e.code === 'Tab') {
       e.preventDefault();
       this.targetNextHostile();
@@ -275,9 +287,11 @@ export class SimulationEngine {
   private handleWheel = (e: WheelEvent) => {
     e.preventDefault();
     if (this.viewMode === 'orbit') {
-      this.orbitAngle.radius = Math.max(16, Math.min(220, this.orbitAngle.radius + e.deltaY * 0.06));
+      this.orbitAngle.radius = Math.max(14, Math.min(240, this.orbitAngle.radius + e.deltaY * 0.08));
     } else {
-      this.setThrottle(this.throttlePercent - Math.sign(e.deltaY) * 5);
+      // Smooth POV Camera Zoom In / Zoom Out
+      const zoomStep = Math.sign(e.deltaY) * 0.08;
+      this.setCameraZoom(this.cameraZoom + zoomStep);
     }
   };
 
@@ -317,6 +331,49 @@ export class SimulationEngine {
       soundEffects.playLcarsAcknowledge();
     }
     this.broadcastState();
+  }
+
+  // Cycles alert condition: Green -> Yellow -> Red -> Green [G key]
+  public cycleAlertLevel() {
+    let nextLevel: AlertLevel = 'green';
+    if (this.alertLevel === 'green') {
+      nextLevel = 'yellow';
+    } else if (this.alertLevel === 'yellow') {
+      nextLevel = 'red';
+    } else {
+      nextLevel = 'green';
+    }
+    this.setAlertLevel(nextLevel);
+    this.addLogEvent(
+      'DEFENSE',
+      nextLevel === 'red' ? 'critical' : (nextLevel === 'yellow' ? 'warning' : 'info'),
+      `Alert Status Set: Condition ${nextLevel.toUpperCase()}`,
+      nextLevel === 'red' ? 'Battle stations! Multiphasic shields raised, weapons armed.' :
+      nextLevel === 'yellow' ? 'Yellow alert. Defensive grid and warp core on standby.' :
+      'Condition Green. Standard exploration posture nominal.'
+    );
+  }
+
+  // Camera POV Zoom In / Zoom Out methods
+  public setCameraZoom(zoom: number) {
+    this.cameraZoom = THREE.MathUtils.clamp(zoom, 0.4, 2.5);
+    this.broadcastState();
+  }
+
+  public zoomIn(amount: number = 0.15) {
+    this.setCameraZoom(this.cameraZoom - amount);
+  }
+
+  public zoomOut(amount: number = 0.15) {
+    this.setCameraZoom(this.cameraZoom + amount);
+  }
+
+  public resetZoom() {
+    this.setCameraZoom(1.0);
+  }
+
+  public getCameraZoom(): number {
+    return this.cameraZoom;
   }
 
   public setShields(raised: boolean) {
@@ -445,15 +502,15 @@ export class SimulationEngine {
   public triggerEvasiveBoost() {
     if (this.isWarping || this.isBoostActive || this.boostCharge < 35) return;
     this.isBoostActive = true;
-    this.boostDuration = 2.2;
+    this.boostDuration = 13.0;
     this.boostCharge = 0;
-    this.screenShakeIntensity = 0.25;
+    this.screenShakeIntensity = 0.35;
     soundEffects.playEvasiveBoost();
     this.addLogEvent(
       'DEFENSE',
       'info',
-      'Evasive Thrusters Overdrive',
-      'Capacitors discharged into impulse manifolds. Velocity and maneuverability surged.'
+      'Evasive Thrusters Overdrive Engaged',
+      'Impulse manifold capacitors discharged! 13s speed surge, 220 km/s, 75% disruptor deflection active.'
     );
     this.broadcastState(true);
   }
@@ -482,12 +539,23 @@ export class SimulationEngine {
 
   // --- DAMAGE & IMPACT SYSTEM ---
   public applyDamageToEnterprise(amount: number) {
+    if (this.isDestroyed) return;
+
+    // Evasive Thrusters Overdrive deflection chance (75% deflection)
+    if (this.isBoostActive && Math.random() < 0.75) {
+      soundEffects.playShieldToggle(true);
+      this.addLogEvent('DEFENSE', 'success', 'Evasive Overdrive Deflection', 'Hostile fire deflected by high-frequency impulse wake!');
+      return;
+    }
+
+    const effectiveAmount = this.isBoostActive ? amount * 0.35 : amount;
+
     this.lastDamageTime = performance.now();
     this.screenShakeIntensity = Math.min(0.8, this.screenShakeIntensity + 0.35);
     this.isUnderAttack = true;
 
     // Track combat telemetry for adaptive hostile scaling
-    this.combatManager.adaptiveTracker.recordDamageTaken(amount);
+    this.combatManager.adaptiveTracker.recordDamageTaken(effectiveAmount);
 
     // Automatic red alert when taking unexpected fire
     if (this.alertLevel !== 'red') {
@@ -497,7 +565,7 @@ export class SimulationEngine {
     if (this.shieldsRaised && this.shieldIntegrity > 0) {
       const prevShield = this.shieldIntegrity;
       // Enterprise Heavy Multiphasic Shields absorb hits with flagship resilience
-      this.shieldIntegrity = Math.max(0, this.shieldIntegrity - amount * 0.65);
+      this.shieldIntegrity = Math.max(0, this.shieldIntegrity - effectiveAmount * 0.65);
       soundEffects.playShieldHit();
 
       // Shield flare visual
@@ -518,27 +586,114 @@ export class SimulationEngine {
       }
     } else {
       // Direct hull hit
-      this.hullIntegrity = Math.max(0, this.hullIntegrity - amount * 0.85);
+      this.hullIntegrity = Math.max(0, this.hullIntegrity - effectiveAmount * 0.85);
       soundEffects.playHullImpact();
       this.space.triggerExplosion(this.position, 1.2);
       this.addLogEvent('DAMAGE', 'critical', 'Direct Hull Impact', `Structural integrity at ${Math.round(this.hullIntegrity)}%`);
 
       if (this.hullIntegrity <= 0) {
+        this.hullIntegrity = 0;
+        this.isDestroyed = true;
+        this.isFiringPhasers = false;
+        this.space.stopPhasers();
+        this.throttlePercent = 0;
+        this.velocity.set(0, 0, 0);
+
         // Critical defeat recorded in adaptive system
         this.combatManager.adaptiveTracker.recordPlayerDefeat((cat, type, msg, det) => {
           this.addLogEvent(cat, type, msg, det);
         });
 
-        // Emergency containment reset / repair
-        this.hullIntegrity = 100;
-        this.shieldIntegrity = 60;
-        this.position.set(0, 0, 0);
-        soundEffects.playExplosion();
-        this.addLogEvent('DEFENSE', 'warning', 'Emergency Warp Core Containment Reset', 'Ship repaired at Sector 001');
+        // Massive catastrophic explosion VFX and Core Breach Alarm
+        this.space.triggerExplosion(this.position, 6.0);
+        soundEffects.playExplosion(this.position);
+        soundEffects.playCoreBreachAlarm();
+
+        const currentSys = this.space.systems.find((s) => s.id === this.currentSystemId);
+        const tracker = this.combatManager.adaptiveTracker;
+        const accuracy = tracker.torpedoesFired > 0
+          ? Math.min(100, Math.round((tracker.torpedoesHit / tracker.torpedoesFired) * 100))
+          : 80;
+        const evasion = tracker.enemyTorpedoesSpawned > 0
+          ? Math.min(100, Math.round((tracker.enemyTorpedoesDodged / tracker.enemyTorpedoesSpawned) * 100))
+          : 85;
+
+        this.defeatStats = {
+          waveReached: this.combatManager.combatWave,
+          totalKills: tracker.totalKills,
+          scoutsDestroyed: tracker.scoutsDestroyed,
+          cruisersDestroyed: tracker.cruisersDestroyed,
+          mothershipsDestroyed: tracker.mothershipsDestroyed,
+          combatRating: tracker.combatRating,
+          skillTier: tracker.skillTier,
+          accuracyPercent: accuracy,
+          evasionPercent: evasion,
+          stardate: (45000 + (performance.now() / 10000)).toFixed(1),
+          systemName: currentSys ? currentSys.name : 'Unknown Sector',
+        };
+
+        this.addLogEvent('DAMAGE', 'critical', 'CATASTROPHIC CORE BREACH', 'USS Enterprise NCC-1701 lost in action.');
       }
     }
 
     this.broadcastState();
+  }
+
+  public restartSimulation(retryCurrentWave: boolean = false) {
+    this.isDestroyed = false;
+    this.defeatStats = undefined;
+    this.hullIntegrity = 100;
+    this.shieldIntegrity = 100;
+    this.shieldsRaised = true;
+    this.torpedoCount = 24;
+    this.phaserEnergy = 100;
+    this.isBoostActive = false;
+    this.boostDuration = 0;
+    this.boostCharge = 100;
+    this.throttlePercent = 25; // Original starting throttle (1/4 impulse)
+    this.isWarping = false;
+    this.warpFactor = 4.0;
+    this.velocity.set(0, 0, 0);
+    this.position.set(0, 0, 0);
+    this.orientation.identity();
+    this.forwardVector.set(0, 0, -1);
+    this.upVector.set(0, 1, 0);
+    this.rightVector.set(1, 0, 0);
+    this.pitchRate = 0;
+    this.yawRate = 0;
+    this.rollRate = 0;
+    this.lockedEnemyId = null;
+    this.selectedTargetId = 'sol_earth';
+    this.currentSystemId = 'sol_system';
+    this.activeCoursePlot = null;
+    this.autoPilot = false;
+    this.cameraZoom = 1.0;
+
+    // Completely wipe all hostile ships and projectiles from 3D scene
+    this.combatManager.clearAllHostiles();
+
+    if (retryCurrentWave) {
+      this.combatManager.retryWave();
+      this.combatManager.spawnWave(this.position, this.currentSystemId, this.combatManager.combatWave);
+      this.setAlertLevel('red');
+    } else {
+      // Complete reset to original starting state: 0 enemies, territory secure in Sol System, all progress (XP, Destroyed, ranks) reset
+      this.combatManager.resetToInitialStandby();
+      this.setAlertLevel('green');
+    }
+
+    soundEffects.stopRedAlert();
+    soundEffects.playLcarsAcknowledge();
+    soundEffects.playWarpEngage();
+    this.addLogEvent(
+      'SECTOR',
+      'success',
+      'USS Enterprise Re-Commissioned',
+      retryCurrentWave
+        ? `Systems restored. Re-engaging Wave ${this.combatManager.combatWave}!`
+        : 'All systems, XP, and hostile casualty telemetry reset to initial Starfleet exploration status at Sector 001 Earth.'
+    );
+    this.broadcastState(true);
   }
 
   // --- PLANETARY COLLISION CHECK ---
@@ -733,6 +888,30 @@ export class SimulationEngine {
     let targetEnemyId: string | null = null;
     let targetStaticPos: THREE.Vector3 | null = null;
 
+    // Autonomous Warhead Guidance: if no hostile is locked, auto-acquire closest hostile in forward firing arc
+    if (!this.lockedEnemyId) {
+      const aliveEnemies = this.combatManager.enemyShips.filter((e) => e.isAlive);
+      if (aliveEnemies.length > 0) {
+        let bestEnemy: typeof aliveEnemies[0] | null = null;
+        let bestScore = -Infinity;
+        for (const enemy of aliveEnemies) {
+          const toEnemy = enemy.mesh.position.clone().sub(launchPos);
+          const dist = toEnemy.length();
+          const dir = toEnemy.clone().normalize();
+          const dot = this.forwardVector.dot(dir);
+          // Score prioritizing forward firing cone and closer range
+          const score = dot * 3.5 - (dist / 1400);
+          if (score > bestScore) {
+            bestScore = score;
+            bestEnemy = enemy;
+          }
+        }
+        if (bestEnemy) {
+          this.lockedEnemyId = bestEnemy.id;
+        }
+      }
+    }
+
     if (this.lockedEnemyId) {
       const enemy = this.combatManager.enemyShips.find((e) => e.id === this.lockedEnemyId);
       if (enemy && enemy.isAlive) {
@@ -760,6 +939,13 @@ export class SimulationEngine {
   // --- Main Animation Loop ---
   private animate() {
     const delta = Math.min(this.clock.getDelta(), 0.05);
+
+    if (this.isDestroyed) {
+      this.updateCamera(delta, this.clock.getElapsedTime());
+      this.renderer.render(this.scene, this.camera);
+      this.animFrameId = requestAnimationFrame(this.animate);
+      return;
+    }
 
     // Torpedo automated replicator replenishment (1 torpedo every 6.5s up to 24)
     this.torpedoRechargeTimer += delta;
@@ -904,7 +1090,7 @@ export class SimulationEngine {
       const targetRoll = this.keysPressed['q'] ? 0.7 : this.keysPressed['e'] ? -0.7 : targetYaw * 0.35;
 
       // Stable damping (enhanced agility during evasive thruster overdrive)
-      const steerSpeed = this.isBoostActive ? 7.2 : 4.0;
+      const steerSpeed = this.isBoostActive ? 9.5 : 4.0;
       this.pitchRate = THREE.MathUtils.lerp(this.pitchRate, targetPitch, delta * steerSpeed);
       this.yawRate = THREE.MathUtils.lerp(this.yawRate, targetYaw, delta * steerSpeed);
       this.rollRate = THREE.MathUtils.lerp(this.rollRate, targetRoll, delta * steerSpeed);
@@ -948,11 +1134,11 @@ export class SimulationEngine {
 
       currentSpeed = warpSpeed * this.warpChargeProgress;
     } else {
-      currentSpeed = (this.throttlePercent / 100) * (this.isBoostActive ? 145 : 65);
+      currentSpeed = (this.throttlePercent / 100) * (this.isBoostActive ? 215 : 65);
     }
 
     const desiredVelocity = this.forwardVector.clone().multiplyScalar(currentSpeed);
-    this.velocity.lerp(desiredVelocity, delta * (this.isBoostActive ? 7.5 : 4.0));
+    this.velocity.lerp(desiredVelocity, delta * (this.isBoostActive ? 9.5 : 4.0));
     this.position.addScaledVector(this.velocity, delta);
 
     // Planetary collision check!
@@ -1055,8 +1241,12 @@ export class SimulationEngine {
       this.warpFactor,
       this.position,
       (torpedoPos, prevPos) => {
-        const hitRes = this.combatManager.checkTorpedoHits(torpedoPos, prevPos, 32);
+        const hitRes = this.combatManager.checkTorpedoHits(torpedoPos, prevPos, 80);
         if (hitRes.hit) {
+          // If player did not have a target locked, immediately lock onto the hit enemy so their shield gauge is visible!
+          if (!this.lockedEnemyId && hitRes.enemyId) {
+            this.lockedEnemyId = hitRes.enemyId;
+          }
           if (hitRes.destroyed && hitRes.enemyId === this.lockedEnemyId) {
             this.lockedEnemyId = null;
           }
@@ -1065,9 +1255,26 @@ export class SimulationEngine {
         }
         return false;
       },
-      (enemyId) => {
-        const enemy = this.combatManager.enemyShips.find((e) => e.id === enemyId && e.isAlive);
-        return enemy ? enemy.mesh.position : null;
+      (enemyId, currentPos) => {
+        if (enemyId) {
+          const enemy = this.combatManager.enemyShips.find((e) => e.id === enemyId && e.isAlive);
+          if (enemy) return enemy.mesh.position;
+        }
+        // Autonomous proximity seeking for torpedoes without explicit target or if target is dead:
+        if (currentPos) {
+          const aliveEnemies = this.combatManager.enemyShips.filter((e) => e.isAlive);
+          let closest: typeof aliveEnemies[0] | null = null;
+          let minDist = 850;
+          for (const e of aliveEnemies) {
+            const d = e.mesh.position.distanceTo(currentPos);
+            if (d < minDist) {
+              minDist = d;
+              closest = e;
+            }
+          }
+          if (closest) return closest.mesh.position;
+        }
+        return null;
       }
     );
 
@@ -1086,8 +1293,12 @@ export class SimulationEngine {
     const up = this.upVector;
     const right = this.rightVector;
 
-    const targetFov = this.isWarping ? 74 : 54;
-    this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, targetFov, delta * 3);
+    const targetFov = this.isWarping ? 74 : (this.isBoostActive ? 65 : 54);
+    // For cockpit/bridge views, zooming adjusts the field of view smoothly
+    const effectiveFov = (this.viewMode === 'bridge' || this.viewMode === 'interior_bridge')
+      ? THREE.MathUtils.clamp(targetFov * this.cameraZoom, 26, 85)
+      : targetFov;
+    this.camera.fov = THREE.MathUtils.lerp(this.camera.fov, effectiveFov, delta * (this.isBoostActive ? 4.5 : 3.0));
     this.camera.updateProjectionMatrix();
 
     switch (this.viewMode) {
@@ -1107,8 +1318,10 @@ export class SimulationEngine {
       }
 
       case 'chase': {
-        // High-stability chase camera
-        const offset = forward.clone().multiplyScalar(-38).add(up.clone().multiplyScalar(10.5));
+        // High-stability chase camera with smooth zoom in and out
+        const dist = 38 * this.cameraZoom;
+        const height = 10.5 * Math.max(0.6, Math.sqrt(this.cameraZoom));
+        const offset = forward.clone().multiplyScalar(-dist).add(up.clone().multiplyScalar(height));
         this.targetCameraPos.copy(shipPos).add(offset);
         this.targetLookAt.copy(shipPos).add(forward.clone().multiplyScalar(25));
         break;
@@ -1122,32 +1335,32 @@ export class SimulationEngine {
       }
 
       case 'cinematic': {
-        const cinRadius = 55;
+        const cinRadius = 55 * this.cameraZoom;
         const angle = time * 0.15;
         const cx = Math.sin(angle) * cinRadius;
         const cz = Math.cos(angle) * cinRadius;
-        const cy = Math.sin(time * 0.2) * 14 + 6;
+        const cy = (Math.sin(time * 0.2) * 14 + 6) * Math.sqrt(this.cameraZoom);
         this.targetCameraPos.set(shipPos.x + cx, shipPos.y + cy, shipPos.z + cz);
         this.targetLookAt.copy(shipPos);
         break;
       }
 
       case 'saucer': {
-        const saucerOffset = up.clone().multiplyScalar(3.2).add(forward.clone().multiplyScalar(-6.0));
+        const saucerOffset = up.clone().multiplyScalar(3.2 * Math.sqrt(this.cameraZoom)).add(forward.clone().multiplyScalar(-6.0 * this.cameraZoom));
         this.targetCameraPos.copy(shipPos).add(saucerOffset);
         this.targetLookAt.copy(shipPos).add(forward.clone().multiplyScalar(40));
         break;
       }
 
       case 'nacelle': {
-        const nacelleOffset = right.clone().multiplyScalar(10.5).add(up.clone().multiplyScalar(4.5)).add(forward.clone().multiplyScalar(-16));
+        const nacelleOffset = right.clone().multiplyScalar(10.5 * Math.sqrt(this.cameraZoom)).add(up.clone().multiplyScalar(4.5 * Math.sqrt(this.cameraZoom))).add(forward.clone().multiplyScalar(-16 * this.cameraZoom));
         this.targetCameraPos.copy(shipPos).add(nacelleOffset);
         this.targetLookAt.copy(shipPos).add(forward.clone().multiplyScalar(60));
         break;
       }
 
       case 'deflector': {
-        const deflOffset = forward.clone().multiplyScalar(22).add(up.clone().multiplyScalar(-7.5));
+        const deflOffset = forward.clone().multiplyScalar(22 * this.cameraZoom).add(up.clone().multiplyScalar(-7.5 * Math.sqrt(this.cameraZoom)));
         this.targetCameraPos.copy(shipPos).add(deflOffset);
         this.targetLookAt.copy(shipPos).add(forward.clone().multiplyScalar(6));
         break;
@@ -1163,7 +1376,7 @@ export class SimulationEngine {
           this.orbitAngle.radius = Math.min(this.orbitAngle.radius, 32);
         }
 
-        const r = this.orbitAngle.radius;
+        const r = this.orbitAngle.radius * this.cameraZoom;
         const ox = r * Math.sin(this.orbitAngle.phi) * Math.sin(this.orbitAngle.theta);
         const oy = r * Math.cos(this.orbitAngle.phi);
         const oz = r * Math.sin(this.orbitAngle.phi) * Math.cos(this.orbitAngle.theta);
@@ -1225,12 +1438,16 @@ export class SimulationEngine {
       warpFactor: this.warpFactor,
       warpCharge: this.warpChargeProgress,
       flightAssist: this.flightAssist,
+      cameraZoom: Number(this.cameraZoom.toFixed(2)),
       isBoostActive: this.isBoostActive,
+      boostDuration: Number(this.boostDuration.toFixed(1)),
       boostCharge: Math.round(this.boostCharge),
       alertLevel: this.alertLevel,
       shieldsRaised: this.shieldsRaised,
       shieldIntegrity: Math.round(this.shieldIntegrity),
       hullIntegrity: Math.round(this.hullIntegrity),
+      isDestroyed: this.isDestroyed,
+      defeatStats: this.defeatStats,
       warpCoreOutput: this.isWarping ? 96 : 45,
       impulsePower: this.throttlePercent,
       lastDamageTimestamp: this.lastDamageTime,
@@ -1247,6 +1464,7 @@ export class SimulationEngine {
       autoPilotToTarget: this.autoPilot,
       combatWaveState: this.combatManager.getCombatWaveState(),
       adaptiveDifficulty: this.combatManager.adaptiveTracker.getMetrics(),
+      progression: this.combatManager.adaptiveTracker.getProgression(),
     };
 
     this.onStateChangeCallback(state);

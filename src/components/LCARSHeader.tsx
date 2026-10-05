@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AlertLevel, ShipState } from '../types/simulation';
 import { soundEffects } from '../audio/soundEffects';
-import { Shield, AlertTriangle, Volume2, VolumeX, Eye, HelpCircle, Compass, Radio } from 'lucide-react';
+import { Shield, AlertTriangle, Volume2, VolumeX, Eye, HelpCircle, Compass, Radio, Crosshair } from 'lucide-react';
 
 interface LCARSHeaderProps {
   shipState: ShipState | null;
@@ -95,7 +95,7 @@ export const LCARSHeader: React.FC<LCARSHeaderProps> = ({
       {/* Zone 2: Ship Tactical Status & Alert Level Selector */}
       <div className="flex items-center gap-2 sm:gap-3">
         {/* Alert Level Segmented Controls */}
-        <div className="flex items-center bg-slate-900 border border-slate-800 rounded-md p-0.5">
+        <div className="flex items-center bg-slate-900 border border-slate-800 rounded-md p-0.5" title="Alert Status [G key to cycle]">
           <button
             onClick={() => onSetAlert('green')}
             className={`px-2.5 py-1 text-xs font-trek uppercase rounded transition-colors ${
@@ -103,7 +103,7 @@ export const LCARSHeader: React.FC<LCARSHeaderProps> = ({
                 ? 'bg-emerald-600 text-white font-semibold shadow-sm'
                 : 'text-slate-400 hover:text-emerald-400'
             }`}
-            title="Condition Green - Standard Cruise"
+            title="Condition Green - Standard Cruise [G key to cycle]"
           >
             Green
           </button>
@@ -114,7 +114,7 @@ export const LCARSHeader: React.FC<LCARSHeaderProps> = ({
                 ? 'bg-amber-500 text-slate-950 font-semibold shadow-sm'
                 : 'text-slate-400 hover:text-amber-400'
             }`}
-            title="Condition Yellow - Standby Alert"
+            title="Condition Yellow - Standby Alert [G key to cycle]"
           >
             Yellow
           </button>
@@ -125,11 +125,14 @@ export const LCARSHeader: React.FC<LCARSHeaderProps> = ({
                 ? 'bg-red-600 text-white font-semibold animate-pulse shadow-sm shadow-red-500/50'
                 : 'text-slate-400 hover:text-red-400'
             }`}
-            title="Condition Red - Battle Stations!"
+            title="Condition Red - Battle Stations! [G key to cycle]"
           >
             <AlertTriangle className="w-3 h-3" />
             Red
           </button>
+          <span className="hidden lg:inline text-[9px] text-slate-500 font-mono-nums px-1.5 font-bold" title="Press G key on keyboard to cycle alert status">
+            [G]
+          </span>
         </div>
 
         {/* Quick telemetry indicators */}
@@ -165,20 +168,21 @@ export const LCARSHeader: React.FC<LCARSHeaderProps> = ({
           <span className="font-trek uppercase tracking-wide">Set Course</span>
         </button>
 
-        {/* Long Range Sensors */}
+        {/* Long Range Planetary & Celestial Sensors */}
         <button
           onClick={onToggleScanner}
-          className={`flex items-center gap-1 px-2.5 py-1.5 rounded text-xs font-medium transition-colors border ${
+          className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-medium transition-colors border ${
             isScannerOpen
-              ? 'bg-sky-500/20 text-sky-300 border-sky-500/50'
-              : 'bg-slate-900/80 text-slate-300 border-slate-800 hover:bg-slate-800'
+              ? 'bg-amber-500 text-slate-950 font-bold border-amber-400 shadow-sm shadow-amber-500/30'
+              : 'bg-amber-500/15 text-amber-300 border-amber-500/40 hover:bg-amber-500/25'
           }`}
-          title="Long Range Subspace Sensors"
+          title="Long Range Planetary & Subspace Sensors"
         >
-          <span className="hidden sm:inline">Sensors</span>
+          <Radio className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline font-trek uppercase tracking-wide">Sensors</span>
         </button>
 
-        {/* Tactical Scanner Toggle */}
+        {/* Tactical Combat Radar Toggle */}
         {onToggleTacticalScanner && (
           <button
             onClick={onToggleTacticalScanner}
@@ -187,10 +191,10 @@ export const LCARSHeader: React.FC<LCARSHeaderProps> = ({
                 ? 'bg-sky-500 text-slate-950 font-bold border-sky-400 shadow-sm shadow-sky-500/30'
                 : 'bg-slate-900/80 text-slate-400 border-slate-800 hover:bg-slate-800'
             }`}
-            title="Toggle Astrometric Tactical Scanner [R]"
+            title="Toggle 360° Tactical Combat Radar [R]"
           >
-            <Radio className="w-3.5 h-3.5 text-sky-400" />
-            <span className="hidden sm:inline font-trek uppercase">Radar [R]</span>
+            <Crosshair className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline font-trek uppercase tracking-wide">Radar [R]</span>
           </button>
         )}
 

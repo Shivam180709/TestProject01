@@ -72,6 +72,14 @@ export const FlightHUD: React.FC<FlightHUDProps> = ({
               </div>
             ) : (
               <>
+                {/* Officer Rank & Level Badge */}
+                {shipState.progression && (
+                  <span className="px-2 py-0.5 rounded bg-sky-950/90 border border-sky-500/50 text-[10px] text-sky-300 font-trek font-bold uppercase tracking-wider flex items-center gap-1 shadow-sm">
+                    <Award className="w-3 h-3 text-amber-400" />
+                    <span>Lvl {shipState.progression.level} {shipState.progression.rank}</span>
+                  </span>
+                )}
+
                 <span className="font-trek font-bold text-amber-400 uppercase tracking-wider">
                   WAR LEVEL {wave.level}
                 </span>
@@ -327,13 +335,40 @@ export const FlightHUD: React.FC<FlightHUDProps> = ({
         </div>
       )}
 
+      {/* High-Impact Evasive Boost Visual Overdrive Vignette & Speed Flare */}
+      {shipState.isBoostActive && (
+        <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden">
+          {/* Cyan screen perimeter glow and high-energy impulse edge vignette */}
+          <div className="absolute inset-0 border-4 border-cyan-400/60 shadow-[inset_0_0_100px_rgba(6,182,212,0.45)] animate-pulse" />
+          <div className="absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-cyan-500/25 via-cyan-900/10 to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-cyan-500/25 via-cyan-900/10 to-transparent" />
+          {/* Subtle impulse thruster warp streaks along flanks */}
+          <div className="absolute left-0 inset-y-0 w-24 bg-gradient-to-r from-cyan-500/15 to-transparent" />
+          <div className="absolute right-0 inset-y-0 w-24 bg-gradient-to-l from-cyan-500/15 to-transparent" />
+        </div>
+      )}
+
       {/* Evasive Boost Active Banner */}
       {shipState.isBoostActive && (
-        <div className="absolute top-24 left-1/2 -translate-x-1/2 px-4 py-1.5 rounded-full bg-cyan-950/90 border-2 border-cyan-400 text-center shadow-[0_0_25px_rgba(6,182,212,0.6)] animate-pulse">
-          <span className="text-xs font-trek text-cyan-200 font-bold uppercase tracking-widest flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-            ⚡ EVASIVE THRUSTER BOOST ENGAGED (IMPULSE OVERDRIVE)
-          </span>
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-30 px-5 py-2 rounded-2xl bg-cyan-950/95 border-2 border-cyan-400 text-center shadow-[0_0_35px_rgba(6,182,212,0.85)] animate-pulse flex flex-col items-center gap-1 min-w-[320px]">
+          <div className="text-xs font-trek text-cyan-200 font-bold uppercase tracking-widest flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
+            <span>⚡ EVASIVE OVERDRIVE [{Math.ceil(shipState.boostDuration ?? 13)}s]</span>
+            <span className="text-cyan-400">·</span>
+            <span>220 KM/S (IMPULSE BOOST)</span>
+          </div>
+          <div className="flex items-center gap-2 text-[10px] text-cyan-300 font-mono-nums">
+            <span>75% Disruptor Deflection</span>
+            <span>·</span>
+            <span>2x Thruster Agility</span>
+          </div>
+          {/* Dynamic Depletion Bar */}
+          <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden mt-0.5">
+            <div
+              className="h-full bg-cyan-400 shadow-[0_0_10px_#22d3ee] transition-all duration-100"
+              style={{ width: `${Math.max(0, Math.min(100, ((shipState.boostDuration ?? 13) / 13) * 100))}%` }}
+            />
+          </div>
         </div>
       )}
 
@@ -440,7 +475,7 @@ export const FlightHUD: React.FC<FlightHUDProps> = ({
           </div>
 
           <div className="flex items-center justify-between text-[10px] text-amber-300 font-mono-nums bg-slate-950/80 px-2 py-1 rounded border border-amber-500/30 mb-2">
-            <span>⚡ Torpedo: <strong className="text-red-400">140 DMG</strong> (Antimatter)</span>
+            <span>⚡ Torpedo: <strong className="text-red-400">Antimatter Blast</strong> (-50% to -70% Shields)</span>
             <span>🔥 Phasers: <strong className="text-orange-400">58 DMG/s</strong></span>
           </div>
 
@@ -514,7 +549,7 @@ export const FlightHUD: React.FC<FlightHUDProps> = ({
                   : 'text-slate-400'
               }`}>
                 {shipState.isBoostActive
-                  ? 'OVERDRIVE!'
+                  ? `OVERDRIVE (${shipState.boostDuration ?? 12}s)`
                   : (shipState.boostCharge ?? 100) >= 100
                   ? 'READY [SHIFT]'
                   : `${Math.round(shipState.boostCharge ?? 0)}%`}

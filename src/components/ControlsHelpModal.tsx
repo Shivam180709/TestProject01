@@ -121,6 +121,10 @@ export const ControlsHelpModal: React.FC<ControlsHelpModalProps> = ({
                 <span className="text-emerald-300 font-semibold">Auto-Track ON / OFF</span>
               </div>
               <div className="flex items-center justify-between p-1.5 bg-slate-950/60 rounded">
+                <span className="text-slate-400">Cycle Alert Condition (Green/Yellow/Red)</span>
+                <span className="text-amber-300 font-semibold">G key</span>
+              </div>
+              <div className="flex items-center justify-between p-1.5 bg-slate-950/60 rounded">
                 <span className="text-slate-400">Toggle Red Alert Klaxon</span>
                 <span className="text-red-300 font-semibold">Shift + R</span>
               </div>
@@ -139,12 +143,16 @@ export const ControlsHelpModal: React.FC<ControlsHelpModalProps> = ({
                 <span className="text-emerald-300 font-semibold">C key</span>
               </div>
               <div className="flex items-center justify-between p-1.5 bg-slate-950/60 rounded">
-                <span className="text-slate-400">360° Ship Inspection Orbit</span>
-                <span className="text-emerald-300 font-semibold">Inspect Ship / Orbit Cam</span>
+                <span className="text-slate-400">Camera POV Zoom In / Out</span>
+                <span className="text-emerald-300 font-semibold">Mouse Scroll / + / - keys</span>
               </div>
               <div className="flex items-center justify-between p-1.5 bg-slate-950/60 rounded">
-                <span className="text-slate-400">Zoom Hull & Aztec Plating</span>
-                <span className="text-emerald-300 font-semibold">Mouse Scrollwheel</span>
+                <span className="text-slate-400">Reset Camera Zoom (100%)</span>
+                <span className="text-emerald-300 font-semibold">0 key / Double Click</span>
+              </div>
+              <div className="flex items-center justify-between p-1.5 bg-slate-950/60 rounded">
+                <span className="text-slate-400">360° Ship Inspection Orbit</span>
+                <span className="text-emerald-300 font-semibold">Inspect Ship / Orbit Cam</span>
               </div>
             </div>
           </div>

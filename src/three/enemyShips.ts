@@ -621,6 +621,10 @@ export class AdaptiveDifficultyTracker {
   public waveStartTime: number = performance.now();
   public waveInitialDamageTaken: number = 0;
   public waveInitialKills: number = 0;
+  public waveInitialXp: number = 0;
+  public waveInitialScouts: number = 0;
+  public waveInitialCruisers: number = 0;
+  public waveInitialMotherships: number = 0;
   public waveClearTimes: number[] = [];
 
   // Dynamically adjusted difficulty parameters for subsequent waves
@@ -730,6 +734,86 @@ export class AdaptiveDifficultyTracker {
     this.waveStartTime = performance.now();
     this.waveInitialDamageTaken = this.totalDamageTaken;
     this.waveInitialKills = this.totalKills;
+    this.waveInitialXp = this.playerXp;
+    this.waveInitialScouts = this.scoutsDestroyed;
+    this.waveInitialCruisers = this.cruisersDestroyed;
+    this.waveInitialMotherships = this.mothershipsDestroyed;
+    this.recomputeLiveMetrics();
+  }
+
+  public recomputeLevelFromXp() {
+    const thresholds = [0, 500, 1300, 2500, 4200, 6800, 10500, 16000];
+    const ranks: Array<'Ensign' | 'Lieutenant' | 'Lt Commander' | 'Commander' | 'Captain' | 'Fleet Captain' | 'Admiral'> = [
+      'Ensign', 'Lieutenant', 'Lt Commander', 'Commander', 'Captain', 'Fleet Captain', 'Admiral'
+    ];
+
+    let newLevel = 1;
+    for (let i = 1; i < thresholds.length; i++) {
+      if (this.playerXp >= thresholds[i]) {
+        newLevel = i + 1;
+      } else {
+        break;
+      }
+    }
+
+    this.playerLevel = Math.min(7, newLevel);
+    this.playerRank = ranks[Math.min(ranks.length - 1, this.playerLevel - 1)];
+    this.nextLevelXp = thresholds[Math.min(thresholds.length - 1, this.playerLevel)] || (this.playerLevel * 2500);
+  }
+
+  public rollbackToWaveStart() {
+    this.playerXp = this.waveInitialXp;
+    this.totalKills = this.waveInitialKills;
+    this.scoutsDestroyed = this.waveInitialScouts;
+    this.cruisersDestroyed = this.waveInitialCruisers;
+    this.mothershipsDestroyed = this.waveInitialMotherships;
+    this.totalDamageTaken = this.waveInitialDamageTaken;
+    this.recomputeLevelFromXp();
+    this.recomputeLiveMetrics();
+  }
+
+  // Wipes all career progress (XP, kills by class, officer ranks, battle ratings) to virgin starting state
+  public resetAllProgress() {
+    this.combatRating = 100;
+    this.playerSuccessRate = 100;
+    this.skillTier = 'Cadet';
+    this.winStreak = 0;
+    this.wavesAttempted = 0;
+    this.wavesCleared = 0;
+    this.playerDefeats = 0;
+    this.totalKills = 0;
+    this.scoutsDestroyed = 0;
+    this.cruisersDestroyed = 0;
+    this.mothershipsDestroyed = 0;
+    this.totalDamageDealt = 0;
+    this.totalDamageTaken = 0;
+
+    // Starfleet Officer Level & Threat Progression reset to Cadet / Ensign
+    this.playerLevel = 1;
+    this.playerXp = 0;
+    this.nextLevelXp = 500;
+    this.playerRank = 'Ensign';
+
+    this.torpedoesFired = 0;
+    this.torpedoesHit = 0;
+    this.enemyTorpedoesDodged = 0;
+    this.enemyTorpedoesSpawned = 0;
+    this.waveStartTime = performance.now();
+    this.waveInitialDamageTaken = 0;
+    this.waveInitialKills = 0;
+    this.waveInitialXp = 0;
+    this.waveInitialScouts = 0;
+    this.waveInitialCruisers = 0;
+    this.waveInitialMotherships = 0;
+    this.waveClearTimes = [];
+
+    // Dynamically adjusted difficulty parameters reset to baseline
+    this.adaptiveDamageMultiplier = 1.0;
+    this.fleetIntelligenceTier = 'Standard';
+    this.fleetIntelligenceLevel = 1;
+    this.flankingAggression = 1.0;
+    this.predictiveLeadAim = false;
+
     this.recomputeLiveMetrics();
   }
 
@@ -1458,6 +1542,53 @@ export class WarZoneCombatManager {
       adaptiveDifficulty: metrics,
       progression,
     };
+  }
+
+  // Completely removes all enemy ships and active hostile projectiles from scene
+  public clearAllHostiles() {
+    for (const ship of this.enemyShips) {
+      if (ship.mesh) {
+        this.scene.remove(ship.mesh);
+        ship.mesh.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            const mesh = child as THREE.Mesh;
+            mesh.geometry?.dispose();
+            if (Array.isArray(mesh.material)) {
+              mesh.material.forEach((m) => m.dispose());
+            } else if (mesh.material) {
+              mesh.material.dispose();
+            }
+          }
+        });
+      }
+    }
+    this.enemyShips = [];
+
+    for (const p of this.projectiles) {
+      if (p.mesh) {
+        this.scene.remove(p.mesh);
+      }
+    }
+    this.projectiles = [];
+    this.hasIncomingTorpedo = false;
+  }
+
+  // Resets to initial starting standby state (Sector 001 Earth peaceful exploration)
+  public resetToInitialStandby() {
+    this.clearAllHostiles();
+    this.combatWave = 1;
+    this.totalHostilesDestroyed = 0;
+    this.waveStatus = 'standby';
+    this.reinforcementCountdown = 0;
+    this.hasIncomingTorpedo = false;
+    this.sectorStatusText = 'Sector 001 Earth · Territory Secure';
+    this.adaptiveTracker.resetAllProgress();
+  }
+
+  public retryWave() {
+    this.clearAllHostiles();
+    this.adaptiveTracker.rollbackToWaveStart();
+    this.hasIncomingTorpedo = false;
   }
 
   public dispose() {

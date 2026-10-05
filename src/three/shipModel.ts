@@ -21,7 +21,7 @@ export interface EnterpriseComponents {
   subsystemNodes: Map<string, THREE.Vector3>;
 }
 
-// Helper to draw text along a circular arc in 2D canvas
+// Helper to draw text along a circular arc in 2D canvas with crisp rendering
 function drawCurvedText(
   ctx: CanvasRenderingContext2D,
   text: string,
@@ -37,21 +37,28 @@ function drawCurvedText(
 
   for (let i = 0; i < chars.length; i++) {
     const char = chars[i];
-    ctx.save();
-    const x = centerX + Math.cos(currentAngle) * radius;
-    const y = centerY + Math.sin(currentAngle) * radius;
-    ctx.translate(x, y);
-    // Align character upright along the tangent of the circle
-    ctx.rotate(currentAngle + Math.PI / 2);
-    ctx.fillText(char, 0, 0);
-    ctx.restore();
+    if (char !== ' ') {
+      ctx.save();
+      const x = centerX + Math.cos(currentAngle) * radius;
+      const y = centerY + Math.sin(currentAngle) * radius;
+      ctx.translate(x, y);
+      // Align character upright along the circle tangent, tops pointing radially outward
+      ctx.rotate(currentAngle + Math.PI / 2);
+      ctx.strokeText(char, 0, 0);
+      ctx.fillText(char, 0, 0);
+      ctx.restore();
+    }
     currentAngle += letterSpacingAngle;
   }
 }
 
 // High-resolution procedural texture generator for the Primary Saucer Dorsal Hull
-// Renders the iconic "U. S. S.   E N T E R P R I S E" arched along the forward saucer,
-// "NCC-1701" in bold Starfleet block font, Starfleet delta pennants, and Aztec plating.
+// Faithfully recreates the authentic studio model as shown in the Star Trek reference schematic:
+// - Arched "U.S.S. ENTERPRISE" curved along forward hull
+// - Arched bold "NCC-1701" curved concentric to ship name along outer forward hull
+// - Concentric Aztec plating rings & radial seam lines
+// - Starfleet red speed pennants with gold command deltas
+// - Teardrop bridge deck plate & sensor calibration markings
 function createSaucerDorsalTexture(): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
   canvas.width = 2048;
@@ -66,9 +73,9 @@ function createSaucerDorsalTexture(): THREE.CanvasTexture {
   ctx.fillRect(0, 0, 2048, 2048);
 
   // 1. Concentric Aztec Plating Rings
-  const rings = 20;
+  const rings = 22;
   for (let r = 1; r <= rings; r++) {
-    const radius = r * 46;
+    const radius = r * 44;
     const segments = r * 10;
     for (let s = 0; s < segments; s++) {
       if ((s + r) % 2 === 0) {
@@ -76,7 +83,7 @@ function createSaucerDorsalTexture(): THREE.CanvasTexture {
         const a1 = (s / segments) * Math.PI * 2;
         const a2 = ((s + 0.94) / segments) * Math.PI * 2;
         ctx.arc(centerX, centerY, radius, a1, a2);
-        ctx.arc(centerX, centerY, radius - 38, a2, a1, true);
+        ctx.arc(centerX, centerY, radius - 36, a2, a1, true);
         ctx.closePath();
         ctx.fillStyle = (s * r) % 3 === 0 ? '#cbd6e2' : '#bcc8d6';
         ctx.fill();
@@ -86,7 +93,7 @@ function createSaucerDorsalTexture(): THREE.CanvasTexture {
 
   // 2. Radial Seam Lines & Panel Divisions
   ctx.strokeStyle = '#64748b';
-  ctx.lineWidth = 2.0;
+  ctx.lineWidth = 1.8;
   for (let i = 0; i < 48; i++) {
     const angle = (i / 48) * Math.PI * 2;
     ctx.beginPath();
@@ -96,14 +103,30 @@ function createSaucerDorsalTexture(): THREE.CanvasTexture {
   }
 
   // 3. Concentric Panel Rings
-  ctx.lineWidth = 2.5;
-  for (const pr of [240, 420, 600, 780, 920]) {
+  ctx.lineWidth = 2.2;
+  for (const pr of [240, 420, 560, 720, 860, 960]) {
     ctx.beginPath();
     ctx.arc(centerX, centerY, pr, 0, Math.PI * 2);
     ctx.stroke();
   }
 
-  // 4. Starfleet Red Pennant Banners (Speed Stripes with Arrowhead Delta Insignia)
+  // 4. Starfleet Perimeter Sensor Rectangles (from attached reference image)
+  ctx.fillStyle = '#f8fafc';
+  ctx.strokeStyle = '#94a3b8';
+  ctx.lineWidth = 2;
+  for (const angleDeg of [45, 135, 225, 315]) {
+    const a = (angleDeg * Math.PI) / 180;
+    const px = centerX + Math.cos(a) * 880;
+    const py = centerY + Math.sin(a) * 880;
+    ctx.save();
+    ctx.translate(px, py);
+    ctx.rotate(a + Math.PI / 2);
+    ctx.fillRect(-28, -14, 56, 28);
+    ctx.strokeRect(-28, -14, 56, 28);
+    ctx.restore();
+  }
+
+  // 5. Starfleet Red Pennant Banners (Speed Stripes with Arrowhead Delta Insignia)
   for (const side of [-1, 1]) {
     ctx.save();
     ctx.translate(centerX, centerY);
@@ -119,6 +142,11 @@ function createSaucerDorsalTexture(): THREE.CanvasTexture {
     ctx.closePath();
     ctx.fill();
 
+    // White border outline
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
     // Golden Starfleet Command Arrowhead Delta
     ctx.fillStyle = '#f59e0b';
     ctx.beginPath();
@@ -132,31 +160,54 @@ function createSaucerDorsalTexture(): THREE.CanvasTexture {
     ctx.restore();
   }
 
-  // 5. ICONIC ARCHED TEXT: "U. S. S.   E N T E R P R I S E"
-  // Top of canvas is forward (+Z). We curve it across the forward dorsal saucer.
-  ctx.fillStyle = '#0f172a';
+  // 6. Forward Teardrop Bridge Base & Sensor Ports (matching attached image)
+  ctx.fillStyle = '#d3dde9';
+  ctx.strokeStyle = '#64748b';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.ellipse(centerX, centerY - 130, 150, 220, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Amber inspection sensor squares on forward teardrop
+  ctx.fillStyle = '#f59e0b';
+  ctx.fillRect(centerX - 36, centerY - 250, 22, 22);
+  ctx.fillRect(centerX + 14, centerY - 250, 22, 22);
+
+  // 7. ICONIC ARCHED TEXT: "U.S.S. ENTERPRISE" (matching attached image)
+  // Arched text around forward quadrant concentric to outer registry
+  ctx.fillStyle = '#050914';
+  ctx.strokeStyle = '#050914';
+  ctx.lineWidth = 2.5;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.font = 'bold 54px "Arial", "Helvetica", sans-serif';
+  ctx.font = 'bold 56px "Arial", "Helvetica", sans-serif';
 
-  // Arched text around top curve (angle center -Math.PI / 2)
   drawCurvedText(
     ctx,
-    'U. S. S.   E N T E R P R I S E',
+    'U.S.S. ENTERPRISE',
     centerX,
     centerY,
-    730,
+    600,
     -Math.PI / 2,
-    0.048
+    0.046
   );
 
-  // 6. ICONIC REGISTRY NUMBER: "NCC - 1701"
-  // Centered directly below the ship name in bold Starfleet block lettering
-  ctx.font = 'bold 102px "Arial", "Helvetica", sans-serif';
-  ctx.letterSpacing = '10px';
-  ctx.fillText('NCC - 1701', centerX, centerY - 520);
+  // 8. ICONIC ARCHED REGISTRY NUMBER: "NCC-1701" (matching attached image)
+  // Large bold Starfleet block lettering curved along the outer forward saucer
+  ctx.font = '900 124px "Arial Black", "Arial", "Impact", sans-serif';
+  ctx.lineWidth = 3.5;
+  drawCurvedText(
+    ctx,
+    'NCC-1701',
+    centerX,
+    centerY,
+    780,
+    -Math.PI / 2,
+    0.092
+  );
 
-  // 7. Phaser Bank Targeting Emplacements (Dorsal forward port & starboard)
+  // 9. Phaser Bank Targeting Emplacements (Dorsal forward port & starboard)
   for (const side of [-1, 1]) {
     const px = centerX + side * 360;
     const py = centerY - 320;
@@ -172,7 +223,7 @@ function createSaucerDorsalTexture(): THREE.CanvasTexture {
     ctx.fill();
   }
 
-  // 8. Bridge Module Base Ring & Maintenance Markings
+  // 10. Bridge Module Base Ring & Maintenance Markings
   ctx.strokeStyle = '#475569';
   ctx.lineWidth = 5;
   ctx.beginPath();
@@ -182,6 +233,8 @@ function createSaucerDorsalTexture(): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.anisotropy = 16;
+  texture.needsUpdate = true;
   return texture;
 }
 
@@ -216,7 +269,7 @@ function createSaucerVentralTexture(): THREE.CanvasTexture {
   }
 
   // Underside Registry
-  ctx.font = 'bold 52px "Arial", sans-serif';
+  ctx.font = '900 64px "Arial Black", "Arial", sans-serif';
   ctx.fillStyle = '#0f172a';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -225,6 +278,57 @@ function createSaucerVentralTexture(): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.ClampToEdgeWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.anisotropy = 16;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+// High-resolution Starfleet warp nacelle outboard pennant texture
+function createNacellePennantTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024;
+  canvas.height = 128;
+  const ctx = canvas.getContext('2d')!;
+
+  ctx.clearRect(0, 0, 1024, 128);
+
+  // Red speed chevron pennant stripe (pointing forward towards right)
+  ctx.fillStyle = '#dc2626';
+  ctx.beginPath();
+  ctx.moveTo(30, 24);
+  ctx.lineTo(960, 48);
+  ctx.lineTo(960, 80);
+  ctx.lineTo(30, 104);
+  ctx.closePath();
+  ctx.fill();
+
+  // White border pinstripe
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Golden Starfleet Command Arrowhead Delta at forward tip
+  ctx.fillStyle = '#f59e0b';
+  ctx.beginPath();
+  ctx.moveTo(980, 64);
+  ctx.lineTo(935, 36);
+  ctx.lineTo(948, 64);
+  ctx.lineTo(935, 92);
+  ctx.closePath();
+  ctx.fill();
+
+  // Crisp bold white NCC-1701 registry text along the pennant
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 50px "Arial Black", "Arial", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('NCC - 1701', 500, 64);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.anisotropy = 16;
+  texture.needsUpdate = true;
   return texture;
 }
 
@@ -277,18 +381,25 @@ function createHullTexture(): THREE.CanvasTexture {
   ctx.closePath();
   ctx.fill();
 
-  return new THREE.CanvasTexture(canvas);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = THREE.ClampToEdgeWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.anisotropy = 16;
+  texture.needsUpdate = true;
+  return texture;
 }
 
-// Builds planar UV coordinates for circular saucer geometry so texture maps without pinch
-function applyPlanarSaucerUVs(geo: THREE.BufferGeometry, radius: number) {
+// Builds planar top-down UV coordinates for circular saucer geometry so texture maps without pinch
+function applyPlanarTopDownUVs(geo: THREE.BufferGeometry, radius: number) {
   const pos = geo.attributes.position;
   const uvs = new Float32Array(pos.count * 2);
 
   for (let i = 0; i < pos.count; i++) {
     const x = pos.getX(i);
     const z = pos.getZ(i);
-    // Orthographic top-down projection onto 0..1 UV coordinate space
+    // Orthographic top-down projection onto 0..1 UV coordinate space:
+    // x: -radius .. +radius => u: 0.0 .. 1.0 (starboard +X is right, port -X is left)
+    // z: -radius .. +radius => v: 0.0 .. 1.0 (forward +Z is top of canvas, aft -Z is bottom)
     uvs[i * 2] = (x / (2 * radius)) + 0.5;
     uvs[i * 2 + 1] = (z / (2 * radius)) + 0.5;
   }
@@ -305,6 +416,7 @@ export function buildEnterpriseModel(): EnterpriseComponents {
   const saucerDorsalTex = createSaucerDorsalTexture();
   const saucerVentralTex = createSaucerVentralTexture();
   const hullTex = createHullTexture();
+  const nacellePennantTex = createNacellePennantTexture();
 
   // Starfleet Pearlescent Hull Materials
   const starfleetHullMat = new THREE.MeshStandardMaterial({
@@ -374,36 +486,22 @@ export function buildEnterpriseModel(): EnterpriseComponents {
   const saucerRadius = 14.5;
 
   // Upper Saucer convex dome (shallow cone with smooth curvature)
-  const upperSaucerGeo = new THREE.CylinderGeometry(3.6, saucerRadius, 1.25, 64);
-  const upperSaucer = new THREE.Mesh(upperSaucerGeo, starfleetHullMat);
+  // Maps the high-resolution dorsal Aztec hull and arched U.S.S. ENTERPRISE NCC-1701 directly onto the 3D hull!
+  const upperSaucerGeo = new THREE.CylinderGeometry(3.6, saucerRadius, 1.25, 96);
+  applyPlanarTopDownUVs(upperSaucerGeo, saucerRadius);
+  const upperSaucer = new THREE.Mesh(upperSaucerGeo, saucerDorsalMat);
   upperSaucer.position.y = 0.62;
   saucerGroup.add(upperSaucer);
 
-  // Dedicated High-Resolution Dorsal Decal Disc with planar UVs
-  // Displays "U.S.S. ENTERPRISE", "NCC-1701", and Starfleet pennants in pristine fidelity!
-  const dorsalDecalGeo = new THREE.CircleGeometry(saucerRadius - 0.05, 64);
-  applyPlanarSaucerUVs(dorsalDecalGeo, saucerRadius);
-  const dorsalDecalMesh = new THREE.Mesh(dorsalDecalGeo, saucerDorsalMat);
-  dorsalDecalMesh.rotation.x = -Math.PI / 2;
-  dorsalDecalMesh.position.y = 1.26; // Floats right on the upper surface
-  saucerGroup.add(dorsalDecalMesh);
-
-  // Lower Saucer inverted convex dome
-  const lowerSaucerGeo = new THREE.CylinderGeometry(saucerRadius, 3.2, 1.5, 64);
-  const lowerSaucer = new THREE.Mesh(lowerSaucerGeo, starfleetHullMat);
+  // Lower Saucer inverted convex dome with ventral planetary sensor grid & registry
+  const lowerSaucerGeo = new THREE.CylinderGeometry(saucerRadius, 3.2, 1.5, 96);
+  applyPlanarTopDownUVs(lowerSaucerGeo, saucerRadius);
+  const lowerSaucer = new THREE.Mesh(lowerSaucerGeo, saucerVentralMat);
   lowerSaucer.position.y = -0.75;
   saucerGroup.add(lowerSaucer);
 
-  // Ventral Registry Decal Disc on bottom
-  const ventralDecalGeo = new THREE.CircleGeometry(saucerRadius - 0.1, 64);
-  applyPlanarSaucerUVs(ventralDecalGeo, saucerRadius);
-  const ventralDecalMesh = new THREE.Mesh(ventralDecalGeo, saucerVentralMat);
-  ventralDecalMesh.rotation.x = Math.PI / 2;
-  ventralDecalMesh.position.y = -1.51;
-  saucerGroup.add(ventralDecalMesh);
-
   // Smooth outer edge rim ring
-  const saucerRimGeo = new THREE.CylinderGeometry(saucerRadius + 0.04, saucerRadius + 0.04, 0.42, 64);
+  const saucerRimGeo = new THREE.CylinderGeometry(saucerRadius + 0.04, saucerRadius + 0.04, 0.42, 96);
   const saucerRim = new THREE.Mesh(saucerRimGeo, accentMetalMat);
   saucerRim.position.y = 0.0;
   saucerGroup.add(saucerRim);
@@ -812,6 +910,20 @@ export function buildEnterpriseModel(): EnterpriseComponents {
   portNacelleBeacon.position.set(-nacelleRadius - 0.05, 0, nacelleLength / 2 - 1.0);
   nacelleLeftGroup.add(portNacelleBeacon);
 
+  // Outboard Starfleet Pennant Banner with NCC-1701 & Delta on Port Nacelle
+  const nacellePennantGeo = new THREE.PlaneGeometry(16.0, 1.35);
+  const nacellePennantMat = new THREE.MeshStandardMaterial({
+    map: nacellePennantTex,
+    transparent: true,
+    metalness: 0.25,
+    roughness: 0.35,
+    side: THREE.DoubleSide,
+  });
+  const nacellePennantLeft = new THREE.Mesh(nacellePennantGeo, nacellePennantMat);
+  nacellePennantLeft.rotation.y = -Math.PI / 2;
+  nacellePennantLeft.position.set(-nacelleRadius - 0.04, 0, 1.2);
+  nacelleLeftGroup.add(nacellePennantLeft);
+
   // Aft control fin
   const finGeo = new THREE.BoxGeometry(0.24, 2.0, 2.4);
   const finLeft = new THREE.Mesh(finGeo, accentMetalMat);
@@ -873,6 +985,12 @@ export function buildEnterpriseModel(): EnterpriseComponents {
   const stbdNacelleBeacon = new THREE.Mesh(new THREE.SphereGeometry(0.18, 16, 16), greenBeaconMat);
   stbdNacelleBeacon.position.set(nacelleRadius + 0.05, 0, nacelleLength / 2 - 1.0);
   nacelleRightGroup.add(stbdNacelleBeacon);
+
+  // Outboard Starfleet Pennant Banner with NCC-1701 & Delta on Starboard Nacelle
+  const nacellePennantRight = new THREE.Mesh(nacellePennantGeo, nacellePennantMat);
+  nacellePennantRight.rotation.y = Math.PI / 2;
+  nacellePennantRight.position.set(nacelleRadius + 0.04, 0, 1.2);
+  nacelleRightGroup.add(nacellePennantRight);
 
   const finRight = new THREE.Mesh(finGeo, accentMetalMat);
   finRight.position.set(0, 1.1, -nacelleLength / 2 - 0.5);

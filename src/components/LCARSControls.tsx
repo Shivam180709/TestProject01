@@ -11,6 +11,7 @@ import {
   ShieldAlert,
   Target,
   Radio,
+  Award,
 } from 'lucide-react';
 
 interface LCARSControlsProps {
@@ -25,7 +26,6 @@ interface LCARSControlsProps {
   onFireTorpedo: () => void;
   onToggleShields: () => void;
   onToggleAutoPilot: () => void;
-  onOpenNavigation?: () => void;
   onTargetHostile?: () => void;
   onEnterWarZone?: () => void;
   onSummonHostiles?: () => void;
@@ -33,8 +33,9 @@ interface LCARSControlsProps {
   onToggleCombatAssist?: () => void;
   onTriggerBoost?: () => void;
   onToggleTacticalLog?: () => void;
-  onToggleTacticalScanner?: () => void;
-  isTacticalScannerOpen?: boolean;
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
+  onResetZoom?: () => void;
 }
 
 export const LCARSControls: React.FC<LCARSControlsProps> = ({
@@ -49,7 +50,6 @@ export const LCARSControls: React.FC<LCARSControlsProps> = ({
   onFireTorpedo,
   onToggleShields,
   onToggleAutoPilot,
-  onOpenNavigation,
   onTargetHostile,
   onEnterWarZone,
   onSummonHostiles,
@@ -57,8 +57,9 @@ export const LCARSControls: React.FC<LCARSControlsProps> = ({
   onToggleCombatAssist,
   onTriggerBoost,
   onToggleTacticalLog,
-  onToggleTacticalScanner,
-  isTacticalScannerOpen = true,
+  onZoomIn,
+  onZoomOut,
+  onResetZoom,
 }) => {
   const [isCameraMenuOpen, setIsCameraMenuOpen] = useState<boolean>(false);
 
@@ -107,6 +108,69 @@ export const LCARSControls: React.FC<LCARSControlsProps> = ({
         </div>
       )}
 
+      {/* Starfleet Officer Rank / Ensign Level & Neutralized Ships Status Bar */}
+      {shipState?.progression && (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5 mb-2 rounded-lg bg-slate-900/90 border border-slate-800 text-xs font-mono-nums text-slate-300">
+          {/* Left: Officer Rank, Level & Animated XP Track */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 text-amber-300 font-bold font-trek uppercase tracking-wide">
+              <Award className="w-3.5 h-3.5 text-amber-400" />
+              <span>{shipState.progression.rank}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                LVL {shipState.progression.level}
+              </span>
+            </div>
+
+            {/* XP progress bar */}
+            <div className="flex items-center gap-2">
+              <div className="w-24 sm:w-32 bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-700/60">
+                <div
+                  className="bg-gradient-to-r from-amber-500 to-amber-300 h-full transition-all duration-300 rounded-full"
+                  style={{
+                    width: `${Math.min(100, Math.round((shipState.progression.xp / (shipState.progression.nextLevelXp || 500)) * 100))}%`,
+                  }}
+                />
+              </div>
+              <span className="text-[10px] text-amber-400/90 font-mono">
+                XP {shipState.progression.xp}/{shipState.progression.nextLevelXp}
+              </span>
+            </div>
+          </div>
+
+          {/* Right: Neutralized Ship Breakdown & Total Down */}
+          <div className="flex flex-wrap items-center gap-3 text-[11px]">
+            <span className="text-[10px] font-trek text-slate-400 uppercase tracking-wider hidden sm:inline">
+              Hostiles Neutralized:
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                <span className="text-slate-400 text-[10px]">Scouts:</span>
+                <strong className="text-sky-300 font-bold">{shipState.progression.scoutsDestroyed}</strong>
+              </span>
+              <span className="text-slate-700">·</span>
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-orange-400" />
+                <span className="text-slate-400 text-[10px]">Cruisers:</span>
+                <strong className="text-orange-300 font-bold">{shipState.progression.cruisersDestroyed}</strong>
+              </span>
+              <span className="text-slate-700">·</span>
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                <span className="text-slate-400 text-[10px]">Motherships:</span>
+                <strong className="text-red-400 font-bold">{shipState.progression.mothershipsDestroyed}</strong>
+              </span>
+            </div>
+
+            <div className="h-3 w-[1px] bg-slate-700 mx-1 hidden sm:block" />
+
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 font-bold text-[11px] font-trek uppercase tracking-wide">
+              <span>{shipState.progression.totalEnemiesDestroyed} Total Down</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Streamlined Single-Tier LCARS Control Strip */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         {/* Left Section: Camera Popup Button & Flight Assist */}
@@ -121,6 +185,33 @@ export const LCARSControls: React.FC<LCARSControlsProps> = ({
             <span className="font-trek uppercase tracking-wide">{currentCam.label}</span>
             <ChevronUp className="w-3 h-3 text-slate-400" />
           </button>
+
+          {/* Camera POV Zoom In / Out Controls */}
+          {onZoomIn && onZoomOut && (
+            <div className="flex items-center bg-slate-900 border border-amber-500/40 rounded-lg p-0.5 text-xs font-mono-nums">
+              <button
+                onClick={onZoomIn}
+                className="w-6 h-6 flex items-center justify-center text-amber-300 hover:text-white hover:bg-slate-800 rounded font-bold transition-colors"
+                title="Camera Zoom In [+ / Scroll Up]"
+              >
+                +
+              </button>
+              <button
+                onClick={onResetZoom}
+                className="px-1.5 h-6 flex items-center justify-center text-[10px] text-slate-300 hover:text-amber-300 hover:bg-slate-800 rounded transition-colors font-medium"
+                title="Reset Zoom to 100% [0 key]"
+              >
+                {Math.round(100 / (shipState?.cameraZoom ?? 1.0))}%
+              </button>
+              <button
+                onClick={onZoomOut}
+                className="w-6 h-6 flex items-center justify-center text-amber-300 hover:text-white hover:bg-slate-800 rounded font-bold transition-colors"
+                title="Camera Zoom Out [- / Scroll Down]"
+              >
+                -
+              </button>
+            </div>
+          )}
 
           {/* Combat Auto-Aim / Tracking Assist */}
           {onToggleCombatAssist && (
@@ -231,16 +322,6 @@ export const LCARSControls: React.FC<LCARSControlsProps> = ({
             <Rocket className="w-3.5 h-3.5" />
             <span>{isWarping ? 'DROP WARP' : `WARP ${currentWarp.toFixed(1)}`}</span>
           </button>
-
-          {onOpenNavigation && (
-            <button
-              onClick={onOpenNavigation}
-              className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-sky-300 rounded text-xs font-trek uppercase border border-sky-500/30 transition-colors"
-              title="Set course to any solar system"
-            >
-              Set Course
-            </button>
-          )}
         </div>
 
         {/* Right Section: Compact Tactical Weapons & War Zone */}
@@ -326,22 +407,6 @@ export const LCARSControls: React.FC<LCARSControlsProps> = ({
             >
               <span>📜</span>
               <span className="hidden sm:inline">Log</span>
-            </button>
-          )}
-
-          {/* Tactical Radar Scanner Toggle */}
-          {onToggleTacticalScanner && (
-            <button
-              onClick={onToggleTacticalScanner}
-              className={`py-1.5 px-2.5 rounded-lg text-xs font-trek uppercase border transition-colors flex items-center gap-1 ${
-                isTacticalScannerOpen
-                  ? 'bg-sky-500/25 hover:bg-sky-500/40 text-sky-300 border-sky-400'
-                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
-              }`}
-              title="Toggle Tactical Astrometric Radar Scanner [R Key]"
-            >
-              <Radio className="w-3 h-3 text-sky-400" />
-              <span className="hidden sm:inline">Scanner</span>
             </button>
           )}
 

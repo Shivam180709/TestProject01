@@ -153,6 +153,7 @@ export interface ShipState {
   warpFactor: number;          // 1.0 to 9.9
   warpCharge: number;          // 0 to 1 during jump sequence
   flightAssist: boolean;       // Active flight stabilization
+  cameraZoom?: number;         // 0.4 to 2.5 POV zoom level
   isBoostActive?: boolean;     // Evasive thruster overdrive
   boostDuration?: number;      // Seconds remaining on boost
   boostCharge?: number;        // 0 to 100% recharge

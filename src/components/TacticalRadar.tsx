@@ -75,10 +75,10 @@ export const TacticalRadar: React.FC<TacticalRadarProps> = ({
               ? 'bg-amber-950/90 border-amber-500/70 text-amber-200'
               : 'bg-slate-950/85 border-sky-500/40 text-sky-300 hover:bg-slate-900'
           }`}
-          title="Open Tactical Scanner [R]"
+          title="Open Tactical Radar [R]"
         >
           <Radio className="w-3.5 h-3.5 animate-pulse text-sky-400" />
-          <span>Scanner</span>
+          <span>Radar [R]</span>
           {aliveEnemies.length > 0 && (
             <span className="px-1.5 py-0.2 bg-red-600 text-white rounded text-[10px] font-mono-nums font-bold">
               {aliveEnemies.length}
@@ -97,7 +97,7 @@ export const TacticalRadar: React.FC<TacticalRadarProps> = ({
         <div className="w-full flex items-center justify-between pb-1 mb-1 border-b border-slate-800 text-[11px] font-trek text-sky-400 uppercase tracking-wider">
           <div className="flex items-center gap-1">
             <Radio className="w-3.5 h-3.5 text-sky-400 animate-pulse" />
-            <span className="font-bold">Tactical Scanner</span>
+            <span className="font-bold">Tactical Radar</span>
           </div>
 
           <div className="flex items-center gap-1">
@@ -106,7 +106,7 @@ export const TacticalRadar: React.FC<TacticalRadarProps> = ({
               value={rangeScale}
               onChange={(e) => setRangeScale(Number(e.target.value))}
               className="bg-slate-900 border border-slate-800 rounded px-1 py-0.5 text-[9px] font-mono-nums text-slate-300 focus:outline-none"
-              title="Scanner Range"
+              title="Radar Range"
             >
               <option value={800}>800km</option>
               <option value={1800}>1.8k</option>
@@ -124,7 +124,7 @@ export const TacticalRadar: React.FC<TacticalRadarProps> = ({
             <button
               onClick={() => setIsDismissed(true)}
               className="p-0.5 hover:text-red-400 text-slate-400"
-              title="Hide Scanner (Click or press R to restore)"
+              title="Minimize Radar (Press R or click to restore)"
             >
               <X className="w-3 h-3" />
             </button>
