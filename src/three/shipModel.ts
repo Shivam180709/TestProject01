@@ -42,8 +42,9 @@ function drawCurvedText(
       const x = centerX + Math.cos(currentAngle) * radius;
       const y = centerY + Math.sin(currentAngle) * radius;
       ctx.translate(x, y);
-      // Align character upright along the circle tangent, tops pointing radially outward
+      // Align character upright along the circle tangent, tops pointing towards bridge, upright on screen
       ctx.rotate(currentAngle + Math.PI / 2);
+      ctx.scale(1, -1);
       ctx.strokeText(char, 0, 0);
       ctx.fillText(char, 0, 0);
       ctx.restore();
@@ -273,7 +274,11 @@ function createSaucerVentralTexture(): THREE.CanvasTexture {
   ctx.fillStyle = '#0f172a';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText('NCC - 1701', centerX, centerY + 300);
+  ctx.save();
+  ctx.translate(centerX, centerY + 300);
+  ctx.scale(1, -1);
+  ctx.fillText('NCC - 1701', 0, 0);
+  ctx.restore();
 
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = THREE.ClampToEdgeWrapping;
