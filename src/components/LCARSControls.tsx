@@ -33,6 +33,11 @@ interface LCARSControlsProps {
   onToggleCombatAssist?: () => void;
   onTriggerBoost?: () => void;
   onToggleTacticalLog?: () => void;
+  onToggleNavigation?: () => void;
+  isNavigationOpen?: boolean;
+  onToggleMap?: () => void;
+  onDock?: (stationId?: string) => void;
+  onUndock?: () => void;
   onZoomIn?: () => void;
   onZoomOut?: () => void;
   onResetZoom?: () => void;
@@ -57,6 +62,11 @@ export const LCARSControls: React.FC<LCARSControlsProps> = ({
   onToggleCombatAssist,
   onTriggerBoost,
   onToggleTacticalLog,
+  onToggleNavigation,
+  isNavigationOpen,
+  onToggleMap,
+  onDock,
+  onUndock,
   onZoomIn,
   onZoomOut,
   onResetZoom,
@@ -395,6 +405,55 @@ export const LCARSControls: React.FC<LCARSControlsProps> = ({
             >
               <span>⚡</span>
               <span className="hidden sm:inline">Boost</span>
+            </button>
+          )}
+
+          {/* Space Station Dock / Undock Action */}
+          {shipState?.isDocked ? (
+            <button
+              onClick={onUndock}
+              className="py-1.5 px-3 rounded-lg text-xs font-trek uppercase font-bold border transition-colors bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400 shadow-md shadow-emerald-600/40 flex items-center gap-1.5"
+              title="Disengage mooring clamps and depart starbase [X key]"
+            >
+              <span>⚓</span>
+              <span>Undock [X]</span>
+            </button>
+          ) : shipState?.canDockAtStation ? (
+            <button
+              onClick={() => onDock?.(shipState.canDockAtStation?.id)}
+              className="py-1.5 px-3 rounded-lg text-xs font-trek uppercase font-bold border transition-colors bg-cyan-500 hover:bg-cyan-400 text-slate-950 border-cyan-300 shadow-md shadow-cyan-500/50 flex items-center gap-1.5 animate-pulse"
+              title="Dock at station for 100% hull repair and full torpedo reload [X key]"
+            >
+              <span>⚓</span>
+              <span>Dock & Refit [X]</span>
+            </button>
+          ) : null}
+
+          {/* Quick Course Plotter Drawer (Emergency Escape Navigation Menu) */}
+          {onToggleNavigation && (
+            <button
+              onClick={onToggleNavigation}
+              className={`py-1.5 px-3 rounded-lg text-xs font-trek uppercase font-bold border transition-all flex items-center gap-1.5 shadow-sm ${
+                isNavigationOpen
+                  ? 'bg-sky-500 text-slate-950 border-sky-300 shadow-md shadow-sky-500/40'
+                  : 'bg-sky-500/20 hover:bg-sky-500/35 text-sky-300 border-sky-400/50 hover:border-sky-300'
+              }`}
+              title="Stellar Cartography & Emergency Escape Course Plotter Menu [N key]"
+            >
+              <span>🧭</span>
+              <span>Set Course [N]</span>
+            </button>
+          )}
+
+          {/* Star System & Planetary Map Option */}
+          {onToggleMap && (
+            <button
+              onClick={onToggleMap}
+              className="py-1.5 px-3 rounded-lg text-xs font-trek uppercase font-bold border transition-all bg-amber-500/20 hover:bg-amber-500/35 text-amber-300 border-amber-400/50 hover:border-amber-300 flex items-center gap-1.5 shadow-sm"
+              title="View all star systems, planets, and space stations [M key]"
+            >
+              <span>🗺️</span>
+              <span>Star Map [M]</span>
             </button>
           )}
 

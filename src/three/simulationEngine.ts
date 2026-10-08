@@ -95,6 +95,13 @@ export class SimulationEngine {
   private boostDuration: number = 0;
   private boostCharge: number = 100;
 
+  // Space Station Docking & Starship Repair / Rearm System
+  private isDocked: boolean = false;
+  private dockedStationId: string | null = null;
+  private dockedStationName: string | null = null;
+  private canDockAtStation: { id: string; name: string; distance: number; systemName?: string } | null = null;
+  private undockCooldown: number = 0;
+
   // Keyboard input states
   private keysPressed: { [key: string]: boolean } = {};
 
@@ -119,20 +126,21 @@ export class SimulationEngine {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x020617);
 
-    const width = container.clientWidth || window.innerWidth;
-    const height = container.clientHeight || window.innerHeight;
+    const width = Math.max(container.clientWidth || window.innerWidth || 800, 320);
+    const height = Math.max(container.clientHeight || window.innerHeight || 600, 240);
 
-    this.camera = new THREE.PerspectiveCamera(54, width / height, 0.1, 9000);
+    this.camera = new THREE.PerspectiveCamera(54, width / height, 0.8, 52000);
     this.camera.position.set(0, 12, 38);
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
       powerPreference: 'high-performance',
+      logarithmicDepthBuffer: false,
     });
     this.renderer.setSize(width, height);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.2;
+    this.renderer.toneMappingExposure = 1.15;
     this.container.appendChild(this.renderer.domElement);
 
     this.clock = new THREE.Clock();
@@ -207,8 +215,9 @@ export class SimulationEngine {
 
   private handleResize = () => {
     if (!this.container) return;
-    const width = this.container.clientWidth;
-    const height = this.container.clientHeight;
+    const width = this.container.clientWidth || window.innerWidth;
+    const height = this.container.clientHeight || window.innerHeight;
+    if (width <= 0 || height <= 0) return;
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
@@ -240,6 +249,12 @@ export class SimulationEngine {
       this.targetNextHostile();
     } else if (e.code === 'ShiftLeft' || e.code === 'ShiftRight' || e.code === 'KeyB') {
       this.triggerEvasiveBoost();
+    } else if (e.code === 'KeyX' || e.code === 'KeyU') {
+      if (this.isDocked) {
+        this.undockFromStation();
+      } else {
+        this.dockAtStation();
+      }
     } else if (e.code === 'KeyL') {
       this.onToggleLogConsoleCallback?.();
     } else if (e.code === 'KeyR' && e.shiftKey) {
@@ -537,6 +552,143 @@ export class SimulationEngine {
     return this.combatAssist;
   }
 
+  // --- SPACE STATION DOCKING, REPAIR & TORPEDO REFILL SYSTEM ---
+  public dockAtStation(stationId?: string): boolean {
+    if (this.undockCooldown > 0) {
+      return false;
+    }
+
+    let targetPlanet = stationId
+      ? this.space.planets.find((p) => p.id === stationId && p.type === 'starbase')
+      : null;
+
+    if (!targetPlanet && this.canDockAtStation) {
+      targetPlanet = this.space.planets.find((p) => p.id === this.canDockAtStation?.id);
+    }
+
+    if (!targetPlanet) {
+      // Find closest starbase within 300 units
+      let closest: typeof this.space.planets[0] | null = null;
+      let minD = 300;
+      for (const p of this.space.planets) {
+        if (p.type === 'starbase') {
+          const mesh = this.space.targetMeshes.get(p.id);
+          const pos = mesh ? mesh.position : new THREE.Vector3(...p.position);
+          const d = this.position.distanceTo(pos);
+          if (d < minD) {
+            minD = d;
+            closest = p;
+          }
+        }
+      }
+      targetPlanet = closest;
+    }
+
+    if (!targetPlanet) {
+      this.addLogEvent('NAVIGATION', 'warning', 'No space station or orbital dock in docking range.', 'Navigate within 260 km of an orbital starbase.');
+      return false;
+    }
+
+    this.isDocked = true;
+    this.dockedStationId = targetPlanet.id;
+    this.dockedStationName = targetPlanet.name;
+    this.isWarping = false;
+    this.setThrottle(0);
+    this.velocity.set(0, 0, 0);
+
+    // Position starship securely alongside spacedock mooring rings
+    const mesh = this.space.targetMeshes.get(targetPlanet.id);
+    const stationPos = mesh ? mesh.position : new THREE.Vector3(...targetPlanet.position);
+    const offsetDir = this.position.clone().sub(stationPos).normalize();
+    if (offsetDir.lengthSq() < 0.1) offsetDir.set(0, 0, 1);
+    this.position.copy(stationPos).add(offsetDir.multiplyScalar(targetPlanet.radius + 32));
+    this.orientation.setFromUnitVectors(new THREE.Vector3(0, 0, -1), offsetDir.clone().negate());
+
+    // Complete Hull Restoration, Shield Recalibration, and Full Torpedo Rearm
+    const prevHull = Math.round(this.hullIntegrity);
+    this.hullIntegrity = 100;
+    this.shieldIntegrity = 100;
+    this.torpedoCount = 30; // Refill to full standard Starfleet magazine!
+    this.phaserEnergy = 100;
+    this.boostCharge = 100;
+    this.alertLevel = 'green';
+    this.isUnderAttack = false;
+    this.combatManager.hasIncomingTorpedo = false;
+
+    soundEffects.stopRedAlert();
+    soundEffects.playLcarsAcknowledge();
+    soundEffects.playLcarsBeep(980, 0.25);
+
+    this.addLogEvent(
+      'DEFENSE',
+      'success',
+      `Docked securely at ${targetPlanet.name}. Hull restored from ${prevHull}% to 100%, shields recharged, and photon torpedo magazines fully rearmed (30/30).`,
+      'Spacedock maintenance crews report all primary & secondary systems fully certified for frontline combat operations.'
+    );
+
+    this.broadcastState(true);
+    return true;
+  }
+
+  public undockFromStation(): void {
+    if (!this.isDocked) return;
+    const name = this.dockedStationName || 'Starbase';
+    const stationId = this.dockedStationId;
+
+    this.isDocked = false;
+    this.dockedStationId = null;
+    this.dockedStationName = null;
+    this.undockCooldown = 5.0; // 5-second cooldown to guarantee ship does not instantly re-dock
+    this.canDockAtStation = null;
+
+    // Determine outward trajectory pointing cleanly away from the station center
+    let stationPos: THREE.Vector3 | null = null;
+    let stationRadius = 24;
+    if (stationId) {
+      const pData = this.space.planets.find((p) => p.id === stationId);
+      if (pData) {
+        stationRadius = pData.radius;
+        const mesh = this.space.targetMeshes.get(stationId);
+        stationPos = mesh ? mesh.position.clone() : new THREE.Vector3(...pData.position);
+      }
+    }
+
+    let outward: THREE.Vector3;
+    if (stationPos) {
+      outward = this.position.clone().sub(stationPos).normalize();
+      if (outward.lengthSq() < 0.1) outward.set(0, 0, 1);
+      // Place ship comfortably outside docking mooring ring
+      this.position.copy(stationPos).add(outward.clone().multiplyScalar(stationRadius + 95));
+    } else {
+      outward = this.forwardVector.clone();
+      this.position.add(outward.clone().multiplyScalar(85));
+    }
+
+    // Orient starship heading outward into free space
+    this.orientation.setFromUnitVectors(new THREE.Vector3(0, 0, -1), outward);
+    this.forwardVector.copy(outward);
+
+    // Separation impulse burn away from spacedock
+    this.velocity.copy(outward).multiplyScalar(42);
+    this.setThrottle(25);
+
+    soundEffects.playLcarsAcknowledge();
+    soundEffects.playLcarsBeep(640, 0.12);
+
+    this.addLogEvent(
+      'NAVIGATION',
+      'info',
+      `Mooring clamps released from ${name}. Separation thrusters engaged.`,
+      'All umbilicals detached. Ship is safely clear of station perimeter and under manual helm control.'
+    );
+
+    this.broadcastState(true);
+  }
+
+  public isShipDocked(): boolean {
+    return this.isDocked;
+  }
+
   // --- DAMAGE & IMPACT SYSTEM ---
   public applyDamageToEnterprise(amount: number) {
     if (this.isDestroyed) return;
@@ -725,6 +877,18 @@ export class SimulationEngine {
         }
         soundEffects.playLcarsBeep(440, 0.15);
         soundEffects.updateImpulseHum(0, false);
+      }
+
+      // Starbase / Spacedock Proximity Buffer (Protective tractor buffer prevents collision damage, no auto-dock)
+      if (planetData?.type === 'starbase' || id.includes('spacedock') || id.includes('station') || id.includes('dock')) {
+        if (dist < boundRadius) {
+          const repulsion = this.position.clone().sub(tMesh.position);
+          if (repulsion.lengthSq() < 0.1) repulsion.set(0, 0, 1);
+          repulsion.normalize();
+          this.position.copy(tMesh.position).add(repulsion.clone().multiplyScalar(boundRadius + 6));
+          this.velocity.multiplyScalar(0.2);
+        }
+        continue;
       }
 
       if (dist < boundRadius) {
@@ -957,6 +1121,11 @@ export class SimulationEngine {
       }
     }
 
+    // Countdown undock cooldown timer
+    if (this.undockCooldown > 0) {
+      this.undockCooldown = Math.max(0, this.undockCooldown - delta);
+    }
+
     // Evasive Thrusters Boost duration & capacitor recharge
     if (this.isBoostActive) {
       this.boostDuration -= delta;
@@ -1062,7 +1231,32 @@ export class SimulationEngine {
       }
     }
 
-    // 3. Stable Flight Steering Model & Combat Dogfight Assist
+    // 3. Update Space Station & Docking Proximity (Only when not docked and cooldown expired)
+    let nearestStation: { id: string; name: string; distance: number; systemName?: string } | null = null;
+    if (!this.isDocked && this.undockCooldown <= 0) {
+      let minStationDist = Infinity;
+      const currentSys = this.space.systems.find((s) => s.id === this.currentSystemId);
+
+      for (const p of this.space.planets) {
+        if (p.type === 'starbase') {
+          const mesh = this.space.targetMeshes.get(p.id);
+          const pos = mesh ? mesh.position : new THREE.Vector3(...p.position);
+          const dist = this.position.distanceTo(pos);
+          if (dist <= 260 && dist < minStationDist) {
+            minStationDist = dist;
+            nearestStation = {
+              id: p.id,
+              name: p.name,
+              distance: Math.round(dist),
+              systemName: currentSys?.name,
+            };
+          }
+        }
+      }
+    }
+    this.canDockAtStation = nearestStation;
+
+    // 4. Stable Flight Steering Model & Combat Dogfight Assist
     if (!this.activeCoursePlot || !this.activeCoursePlot.isEngaged) {
       // Dogfight Combat Assist: if locked on enemy, smoothly assist alignment
       if (this.combatAssist && this.lockedEnemyId) {
@@ -1074,32 +1268,32 @@ export class SimulationEngine {
         }
       }
 
-      // Smooth keyboard steering rates
+      // Smooth keyboard steering rates - tuned for responsive, engaging playability
       const targetPitch = (this.keysPressed['w'] || this.keysPressed['arrowup'])
-        ? -0.55
+        ? -0.65
         : (this.keysPressed['s'] || this.keysPressed['arrowdown'])
-        ? 0.55
+        ? 0.65
         : 0;
 
       const targetYaw = (this.keysPressed['a'] || this.keysPressed['arrowleft'])
-        ? 0.55
+        ? 0.65
         : (this.keysPressed['d'] || this.keysPressed['arrowright'])
-        ? -0.55
+        ? -0.65
         : 0;
 
-      const targetRoll = this.keysPressed['q'] ? 0.7 : this.keysPressed['e'] ? -0.7 : targetYaw * 0.35;
+      const targetRoll = this.keysPressed['q'] ? 0.75 : this.keysPressed['e'] ? -0.75 : targetYaw * 0.35;
 
       // Stable damping (enhanced agility during evasive thruster overdrive)
-      const steerSpeed = this.isBoostActive ? 9.5 : 4.0;
+      const steerSpeed = this.isBoostActive ? 10.0 : 5.2;
       this.pitchRate = THREE.MathUtils.lerp(this.pitchRate, targetPitch, delta * steerSpeed);
       this.yawRate = THREE.MathUtils.lerp(this.yawRate, targetYaw, delta * steerSpeed);
       this.rollRate = THREE.MathUtils.lerp(this.rollRate, targetRoll, delta * steerSpeed);
 
       // Flight assist auto-leveling
       if (this.flightAssist && targetPitch === 0 && targetYaw === 0 && targetRoll === 0) {
-        this.pitchRate = THREE.MathUtils.lerp(this.pitchRate, 0, delta * 6);
-        this.yawRate = THREE.MathUtils.lerp(this.yawRate, 0, delta * 6);
-        this.rollRate = THREE.MathUtils.lerp(this.rollRate, 0, delta * 6);
+        this.pitchRate = THREE.MathUtils.lerp(this.pitchRate, 0, delta * 7);
+        this.yawRate = THREE.MathUtils.lerp(this.yawRate, 0, delta * 7);
+        this.rollRate = THREE.MathUtils.lerp(this.rollRate, 0, delta * 7);
       }
     }
 
@@ -1115,11 +1309,11 @@ export class SimulationEngine {
     this.upVector.set(0, 1, 0).applyQuaternion(this.orientation);
     this.rightVector.set(1, 0, 0).applyQuaternion(this.orientation);
 
-    // 4. Flight Speed & Velocity Update
+    // 5. Flight Speed & Velocity Update
     let currentSpeed = 0;
     if (this.isWarping) {
-      this.warpChargeProgress = Math.min(1.0, this.warpChargeProgress + delta * 1.4);
-      let warpSpeed = Math.pow(this.warpFactor, 2.6) * 95;
+      this.warpChargeProgress = Math.min(1.0, this.warpChargeProgress + delta * 1.5);
+      let warpSpeed = Math.pow(this.warpFactor, 2.6) * 115;
 
       // Deceleration curve when approaching target in active course
       if (this.activeCoursePlot && this.activeCoursePlot.isEngaged) {
@@ -1133,12 +1327,18 @@ export class SimulationEngine {
       }
 
       currentSpeed = warpSpeed * this.warpChargeProgress;
+    } else if (this.isDocked) {
+      currentSpeed = 0;
     } else {
-      currentSpeed = (this.throttlePercent / 100) * (this.isBoostActive ? 215 : 65);
+      const effectiveThrottle = this.isBoostActive ? Math.max(this.throttlePercent, 90) : this.throttlePercent;
+      currentSpeed = (effectiveThrottle / 100) * (this.isBoostActive ? 260 : 85);
     }
 
     const desiredVelocity = this.forwardVector.clone().multiplyScalar(currentSpeed);
-    this.velocity.lerp(desiredVelocity, delta * (this.isBoostActive ? 9.5 : 4.0));
+    this.velocity.lerp(desiredVelocity, delta * (this.isBoostActive ? 10.0 : (this.isDocked ? 12.0 : 5.5)));
+    if (this.isDocked) {
+      this.velocity.set(0, 0, 0);
+    }
     this.position.addScaledVector(this.velocity, delta);
 
     // Planetary collision check!
@@ -1281,8 +1481,12 @@ export class SimulationEngine {
     // 10. Throttled UI State Broadcast (15 Hz - Eliminates React render lag!)
     this.broadcastState();
 
-    // 11. Render
-    this.renderer.render(this.scene, this.camera);
+    // 11. Render with runtime protection
+    try {
+      this.renderer.render(this.scene, this.camera);
+    } catch (renderErr) {
+      console.warn('Frame render error caught:', renderErr);
+    }
 
     this.animFrameId = requestAnimationFrame(this.animate);
   }
@@ -1418,6 +1622,12 @@ export class SimulationEngine {
     let displaySpeed = 0;
     if (this.isWarping) {
       displaySpeed = Math.round(this.warpFactor * 10) / 10;
+    } else if (this.isDocked) {
+      displaySpeed = 0;
+    } else if (this.isBoostActive) {
+      // Evasive boost surges impulse velocity by over 3.3x up to ~247,000 km/s!
+      const boostThrottle = Math.max(this.throttlePercent, 90);
+      displaySpeed = Math.round((boostThrottle / 100) * 74948 * 3.3);
     } else {
       displaySpeed = Math.round((this.throttlePercent / 100) * 74948);
     }
@@ -1465,6 +1675,10 @@ export class SimulationEngine {
       combatWaveState: this.combatManager.getCombatWaveState(),
       adaptiveDifficulty: this.combatManager.adaptiveTracker.getMetrics(),
       progression: this.combatManager.adaptiveTracker.getProgression(),
+      isDocked: this.isDocked,
+      dockedStationId: this.dockedStationId || undefined,
+      dockedStationName: this.dockedStationName || undefined,
+      canDockAtStation: this.canDockAtStation,
     };
 
     this.onStateChangeCallback(state);

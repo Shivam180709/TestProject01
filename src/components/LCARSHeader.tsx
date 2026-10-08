@@ -1,20 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { AlertLevel, ShipState } from '../types/simulation';
 import { soundEffects } from '../audio/soundEffects';
-import { Shield, AlertTriangle, Volume2, VolumeX, Eye, HelpCircle, Compass, Radio, Crosshair } from 'lucide-react';
+import { Shield, AlertTriangle, Volume2, VolumeX, Eye, HelpCircle, Radio, Crosshair } from 'lucide-react';
 
 interface LCARSHeaderProps {
   shipState: ShipState | null;
   onSetAlert: (level: AlertLevel) => void;
   onToggleInspection: () => void;
   onToggleScanner: () => void;
-  onToggleNavigation: () => void;
   onToggleHelp: () => void;
   onToggleLog?: () => void;
   onToggleTacticalScanner?: () => void;
   isInspectionOpen: boolean;
   isScannerOpen: boolean;
-  isNavigationOpen: boolean;
   isLogOpen?: boolean;
   isTacticalScannerOpen?: boolean;
   logCount?: number;
@@ -25,13 +23,11 @@ export const LCARSHeader: React.FC<LCARSHeaderProps> = ({
   onSetAlert,
   onToggleInspection,
   onToggleScanner,
-  onToggleNavigation,
   onToggleHelp,
   onToggleLog,
   onToggleTacticalScanner,
   isInspectionOpen,
   isScannerOpen,
-  isNavigationOpen,
   isLogOpen,
   isTacticalScannerOpen = true,
   logCount,
@@ -154,20 +150,6 @@ export const LCARSHeader: React.FC<LCARSHeaderProps> = ({
 
       {/* Zone 3: Modal Actions & Sound Controls */}
       <div className="flex items-center gap-2">
-        {/* Set Course / Star Chart */}
-        <button
-          onClick={onToggleNavigation}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors border ${
-            isNavigationOpen
-              ? 'bg-sky-500 text-slate-950 font-bold border-sky-400 shadow-sm shadow-sky-500/30'
-              : 'bg-sky-500/15 text-sky-300 border-sky-500/40 hover:bg-sky-500/25'
-          }`}
-          title="Stellar Cartography & Solar System Course Plotter"
-        >
-          <Compass className="w-3.5 h-3.5" />
-          <span className="font-trek uppercase tracking-wide">Set Course</span>
-        </button>
-
         {/* Long Range Planetary & Celestial Sensors */}
         <button
           onClick={onToggleScanner}

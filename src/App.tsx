@@ -24,6 +24,8 @@ import { TacticalRadar } from './components/TacticalRadar';
 import { ControlsHelpModal } from './components/ControlsHelpModal';
 import { TacticalLogConsole, TacticalHUDTicker } from './components/TacticalLogConsole';
 import { EnterpriseDestructionModal } from './components/EnterpriseDestructionModal';
+import { StarSystemMapModal } from './components/StarSystemMapModal';
+import { STAR_TREK_SOLAR_SYSTEMS } from './three/solarSystems';
 
 export default function App() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -33,7 +35,7 @@ export default function App() {
   const [currentView, setCurrentView] = useState<CameraViewMode>('chase');
   const [targets, setTargets] = useState<CelestialTarget[]>([]);
   const [subsystems, setSubsystems] = useState<ShipSubsystem[]>([]);
-  const [solarSystems, setSolarSystems] = useState<SolarSystem[]>([]);
+  const [solarSystems, setSolarSystems] = useState<SolarSystem[]>(STAR_TREK_SOLAR_SYSTEMS);
   const [enemies, setEnemies] = useState<any[]>([]);
   const [planets, setPlanets] = useState<any[]>([]);
   const [combatAssist, setCombatAssist] = useState<boolean>(true);
@@ -64,6 +66,7 @@ export default function App() {
   const [isInspectionOpen, setIsInspectionOpen] = useState<boolean>(false);
   const [isScannerOpen, setIsScannerOpen] = useState<boolean>(false);
   const [isNavigationOpen, setIsNavigationOpen] = useState<boolean>(false);
+  const [isMapModalOpen, setIsMapModalOpen] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   const [isLogConsoleOpen, setIsLogConsoleOpen] = useState<boolean>(false);
   const [isLogDocked, setIsLogDocked] = useState<boolean>(false);
@@ -109,6 +112,18 @@ export default function App() {
         setIsRadarScannerOpen((prev) => !prev);
       } else if (e.key === 'g' || e.key === 'G') {
         engineRef.current?.cycleAlertLevel();
+      } else if (e.key === 'm' || e.key === 'M') {
+        setIsMapModalOpen((prev) => !prev);
+      } else if (e.key === 'n' || e.key === 'N') {
+        setIsNavigationOpen((prev) => !prev);
+      } else if (e.key === 'x' || e.key === 'X') {
+        if (engineRef.current) {
+          if (engineRef.current.isShipDocked()) {
+            engineRef.current.undockFromStation();
+          } else {
+            engineRef.current.dockAtStation();
+          }
+        }
       }
     };
     window.addEventListener('keydown', handleGlobalKey);
@@ -122,6 +137,18 @@ export default function App() {
   }, []);
 
   // Handlers
+  const handleDock = useCallback((stationId?: string) => {
+    engineRef.current?.dockAtStation(stationId);
+  }, []);
+
+  const handleUndock = useCallback(() => {
+    engineRef.current?.undockFromStation();
+  }, []);
+
+  const handleToggleMap = useCallback(() => {
+    setIsMapModalOpen((prev) => !prev);
+  }, []);
+
   const handleSetAlert = useCallback((level: AlertLevel) => {
     engineRef.current?.setAlertLevel(level);
   }, []);
@@ -181,6 +208,7 @@ export default function App() {
   const handleSetCourse = useCallback((systemId: string, planetId?: string, warpFactor?: number) => {
     engineRef.current?.setCourseToSolarSystem(systemId, planetId, warpFactor);
     setIsNavigationOpen(false);
+    setIsMapModalOpen(false);
   }, []);
 
   const handleCancelCourse = useCallback(() => {
@@ -243,13 +271,11 @@ export default function App() {
         onSetAlert={handleSetAlert}
         onToggleInspection={() => setIsInspectionOpen((prev) => !prev)}
         onToggleScanner={() => setIsScannerOpen((prev) => !prev)}
-        onToggleNavigation={() => setIsNavigationOpen((prev) => !prev)}
         onToggleHelp={() => setIsHelpOpen((prev) => !prev)}
         onToggleLog={() => setIsLogConsoleOpen((prev) => !prev)}
         onToggleTacticalScanner={() => setIsRadarScannerOpen((prev) => !prev)}
         isInspectionOpen={isInspectionOpen}
         isScannerOpen={isScannerOpen}
-        isNavigationOpen={isNavigationOpen}
         isLogOpen={isLogConsoleOpen}
         isTacticalScannerOpen={isRadarScannerOpen}
         logCount={logs.length}
@@ -269,6 +295,9 @@ export default function App() {
         targets={targets}
         onDisengageWarp={handleToggleWarp}
         onSummonNextWave={handleSummonHostiles}
+        onDock={handleDock}
+        onUndock={handleUndock}
+        onToggleNavigation={() => setIsNavigationOpen((prev) => !prev)}
       />
 
       {/* Real-time Tactical Astrometric Radar Scanner */}
@@ -305,6 +334,11 @@ export default function App() {
         onToggleCombatAssist={handleToggleCombatAssist}
         onTriggerBoost={handleTriggerBoost}
         onToggleTacticalLog={() => setIsLogConsoleOpen((prev) => !prev)}
+        onToggleNavigation={() => setIsNavigationOpen((prev) => !prev)}
+        isNavigationOpen={isNavigationOpen}
+        onToggleMap={handleToggleMap}
+        onDock={handleDock}
+        onUndock={handleUndock}
         onZoomIn={handleZoomIn}
         onZoomOut={handleZoomOut}
         onResetZoom={handleResetZoom}
@@ -315,12 +349,26 @@ export default function App() {
         isOpen={isNavigationOpen}
         onClose={() => setIsNavigationOpen(false)}
         solarSystems={solarSystems}
+        shipState={shipState}
         activeCoursePlot={shipState?.activeCoursePlot ?? null}
         currentSystemId={shipState?.currentSystemId ?? 'sol_system'}
         currentWarpFactor={shipState?.warpFactor ?? 6.0}
         onSetWarpFactor={handleSetWarpFactor}
         onSetCourse={handleSetCourse}
         onCancelCourse={handleCancelCourse}
+      />
+
+      {/* Astrometrics Cartography // Sector & Planetary Map with Space Station Refit Docks */}
+      <StarSystemMapModal
+        isOpen={isMapModalOpen}
+        onClose={() => setIsMapModalOpen(false)}
+        solarSystems={solarSystems}
+        shipState={shipState}
+        activeCoursePlot={shipState?.activeCoursePlot ?? null}
+        onSetCourse={handleSetCourse}
+        onCancelCourse={handleCancelCourse}
+        onDock={handleDock}
+        onUndock={handleUndock}
       />
 
       {/* Subsystems & Deck-by-Deck 3D Inspection Drawer */}

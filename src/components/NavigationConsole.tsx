@@ -1,11 +1,13 @@
-import React, { useState } from 'react';
-import { SolarSystem, PlanetData, CoursePlot } from '../types/simulation';
-import { X, Navigation, Compass, Globe, CheckCircle2, Rocket } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { SolarSystem, PlanetData, CoursePlot, ShipState } from '../types/simulation';
+import { STAR_TREK_SOLAR_SYSTEMS } from '../three/solarSystems';
+import { X, Navigation, Compass, Globe, CheckCircle2, Rocket, AlertTriangle, Shield, Anchor } from 'lucide-react';
 
 interface NavigationConsoleProps {
   isOpen: boolean;
   onClose: () => void;
   solarSystems: SolarSystem[];
+  shipState?: ShipState | null;
   activeCoursePlot: CoursePlot | null;
   currentSystemId: string;
   currentWarpFactor?: number;
@@ -18,6 +20,7 @@ export const NavigationConsole: React.FC<NavigationConsoleProps> = ({
   isOpen,
   onClose,
   solarSystems,
+  shipState,
   activeCoursePlot,
   currentSystemId,
   currentWarpFactor = 6.0,
@@ -28,17 +31,46 @@ export const NavigationConsole: React.FC<NavigationConsoleProps> = ({
   const [selectedSystemId, setSelectedSystemId] = useState<string>(currentSystemId || 'sol_system');
   const [selectedPlanetId, setSelectedPlanetId] = useState<string>('');
   const [selectedWarpFactor, setSelectedWarpFactor] = useState<number>(currentWarpFactor);
+  const [navTerritory, setNavTerritory] = useState<'all' | 'federation' | 'klingon' | 'romulan' | 'cardassian' | 'frontier'>('all');
+
+  const effectiveSolarSystems = useMemo(() => {
+    return solarSystems && solarSystems.length > 0 ? solarSystems : STAR_TREK_SOLAR_SYSTEMS;
+  }, [solarSystems]);
+
+  const filteredSystems = useMemo(() => {
+    return effectiveSolarSystems.filter((sys) => {
+      if (navTerritory === 'federation') return sys.territory === 'federation';
+      if (navTerritory === 'klingon') return sys.affiliation?.toLowerCase().includes('klingon') || sys.id === 'kronos_system';
+      if (navTerritory === 'romulan') return sys.affiliation?.toLowerCase().includes('romulan') || sys.id === 'romulus_system';
+      if (navTerritory === 'cardassian') return sys.affiliation?.toLowerCase().includes('cardassian') || sys.id === 'cardassia_system';
+      if (navTerritory === 'frontier') return !sys.territory || (sys.territory !== 'federation' && !sys.affiliation?.toLowerCase().includes('klingon') && !sys.affiliation?.toLowerCase().includes('romulan') && !sys.affiliation?.toLowerCase().includes('cardassian'));
+      return true;
+    });
+  }, [effectiveSolarSystems, navTerritory]);
 
   if (!isOpen) return null;
 
-  const currentSystem = solarSystems.find((s) => s.id === selectedSystemId) || solarSystems[0];
+  const currentSystem =
+    effectiveSolarSystems.find((s) => s.id === selectedSystemId) ||
+    effectiveSolarSystems[0] ||
+    STAR_TREK_SOLAR_SYSTEMS[0];
+
   const activePlanet = selectedPlanetId
-    ? currentSystem.planets.find((p) => p.id === selectedPlanetId)
-    : currentSystem.planets[0];
+    ? currentSystem?.planets?.find((p) => p.id === selectedPlanetId)
+    : currentSystem?.planets?.[0];
 
   const handleSetCourse = () => {
     onSetCourse(currentSystem.id, activePlanet?.id, selectedWarpFactor);
+    onClose();
   };
+
+  const handleEmergencyEscape = (sysId: string, planetId?: string) => {
+    onSetCourse(sysId, planetId, 9.9);
+    onClose();
+  };
+
+  const isLowHealth =
+    (shipState && ((shipState.shieldIntegrity < 50 && shipState.shieldsRaised) || !shipState.shieldsRaised || shipState.hullIntegrity < 65 || shipState.lockedEnemy)) ?? false;
 
   return (
     <div className="fixed inset-y-0 left-0 z-40 w-full sm:w-[500px] bg-slate-950/95 backdrop-blur-xl border-r border-sky-500/40 text-slate-100 shadow-2xl flex flex-col select-none">
@@ -95,9 +127,100 @@ export const NavigationConsole: React.FC<NavigationConsoleProps> = ({
         </div>
       )}
 
+      {/* Emergency Combat Evacuation Section (Especially Useful when Shields / Hull are Low to escape enemy ships) */}
+      <div className={`px-4 py-3 border-b transition-colors ${
+        isLowHealth
+          ? 'bg-gradient-to-r from-red-950/90 via-amber-950/80 to-slate-900 border-red-500/70 shadow-lg shadow-red-950/50'
+          : 'bg-slate-900/60 border-slate-800'
+      }`}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-1.5 text-xs font-trek uppercase font-bold text-amber-300">
+            <AlertTriangle className={`w-3.5 h-3.5 ${isLowHealth ? 'text-red-400 animate-bounce' : 'text-amber-400'}`} />
+            <span>Emergency Warp Escape Protocols</span>
+          </div>
+          {shipState && (
+            <div className="flex items-center gap-2 text-[10px] font-mono-nums">
+              <span className={shipState.shieldsRaised && shipState.shieldIntegrity >= 50 ? 'text-sky-300' : 'text-red-400 font-bold'}>
+                Shields: {shipState.shieldsRaised ? `${shipState.shieldIntegrity}%` : 'DOWN'}
+              </span>
+              <span className="text-slate-600">|</span>
+              <span className={shipState.hullIntegrity >= 60 ? 'text-emerald-400' : 'text-red-400 font-bold'}>
+                Hull: {shipState.hullIntegrity}%
+              </span>
+            </div>
+          )}
+        </div>
+
+        <p className="text-[11px] text-slate-300 mb-2 leading-tight">
+          Instantly break hostile engagement and engage maximum warp (W9.9) towards safe Federation drydocks:
+        </p>
+
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => handleEmergencyEscape('sol_system', 'sol_spacedock')}
+            className="py-1.5 px-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-trek font-bold text-[11px] uppercase tracking-wide transition-all shadow-md flex items-center justify-center gap-1.5 border border-sky-400"
+            title="Emergency Warp to Earth Spacedock One at Warp 9.9"
+          >
+            <Anchor className="w-3.5 h-3.5 text-sky-200" />
+            <span className="truncate">Earth Spacedock</span>
+          </button>
+
+          <button
+            onClick={() => handleEmergencyEscape('andoria_system', 'andoria_starbase')}
+            className="py-1.5 px-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-trek font-bold text-[11px] uppercase tracking-wide transition-all shadow-md flex items-center justify-center gap-1.5 border border-blue-400"
+            title="Emergency Warp to Starbase 11 at Warp 9.9"
+          >
+            <Shield className="w-3.5 h-3.5 text-blue-200" />
+            <span className="truncate">Starbase 11</span>
+          </button>
+
+          <button
+            onClick={() => handleEmergencyEscape('starbase74_sector', 'starbase_74_megadock')}
+            className="py-1.5 px-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white font-trek font-bold text-[11px] uppercase tracking-wide transition-all shadow-md flex items-center justify-center gap-1.5 border border-cyan-400"
+            title="Emergency Warp to Starbase 74 Mega-Spacedock at Warp 9.9"
+          >
+            <Anchor className="w-3.5 h-3.5 text-cyan-200" />
+            <span className="truncate">Starbase 74</span>
+          </button>
+
+          <button
+            onClick={() => handleEmergencyEscape('vulcan_system', 'vulcan_spacedock')}
+            className="py-1.5 px-2 rounded-lg bg-amber-700 hover:bg-amber-600 text-white font-trek font-bold text-[11px] uppercase tracking-wide transition-all shadow-md flex items-center justify-center gap-1.5 border border-amber-400"
+            title="Emergency Warp to Vulcan Orbital Complex at Warp 9.9"
+          >
+            <Shield className="w-3.5 h-3.5 text-amber-200" />
+            <span className="truncate">Vulcan Dock</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Territory Filter Strip */}
+      <div className="px-4 py-2 bg-slate-950 border-b border-slate-800 flex items-center gap-1 overflow-x-auto text-[11px] font-trek">
+        {[
+          { id: 'all', label: 'All Sectors' },
+          { id: 'federation', label: 'Federation' },
+          { id: 'klingon', label: 'Klingon' },
+          { id: 'romulan', label: 'Romulan' },
+          { id: 'cardassian', label: 'Cardassian' },
+          { id: 'frontier', label: 'Deep Space' },
+        ].map((t) => (
+          <button
+            key={t.id}
+            onClick={() => setNavTerritory(t.id as any)}
+            className={`px-2.5 py-1 rounded transition-colors uppercase font-bold whitespace-nowrap ${
+              navTerritory === t.id
+                ? 'bg-sky-500 text-slate-950 shadow-sm'
+                : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       {/* Solar System Selection Strip */}
       <div className="px-4 py-2.5 border-b border-slate-800 bg-slate-900/40 overflow-x-auto flex items-center gap-1.5">
-        {solarSystems.map((sys) => {
+        {filteredSystems.map((sys) => {
           const isSelected = sys.id === currentSystem.id;
           const isHere = sys.id === currentSystemId;
           const isFed = sys.territory === 'federation';

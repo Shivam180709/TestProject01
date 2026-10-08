@@ -101,6 +101,18 @@ export const ControlsHelpModal: React.FC<ControlsHelpModalProps> = ({
                 <span className="text-red-300 font-semibold">T key</span>
               </div>
               <div className="flex items-center justify-between p-1.5 bg-slate-950/60 rounded">
+                <span className="text-slate-400">Quick Course Plotter Drawer (Emergency Escape)</span>
+                <span className="text-sky-300 font-semibold">N key</span>
+              </div>
+              <div className="flex items-center justify-between p-1.5 bg-slate-950/60 rounded">
+                <span className="text-slate-400">Astrometrics Star & Planetary Map</span>
+                <span className="text-sky-300 font-semibold">M key</span>
+              </div>
+              <div className="flex items-center justify-between p-1.5 bg-slate-950/60 rounded">
+                <span className="text-slate-400">Dock / Undock at Space Station (100% Repair & Reload)</span>
+                <span className="text-cyan-300 font-semibold">X key</span>
+              </div>
+              <div className="flex items-center justify-between p-1.5 bg-slate-950/60 rounded">
                 <span className="text-slate-400">Cycle / Lock Hostile Target</span>
                 <span className="text-red-300 font-semibold">Tab key</span>
               </div>

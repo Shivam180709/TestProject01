@@ -28,7 +28,7 @@ export interface PlanetData {
   id: string;
   name: string;
   systemId: string;
-  type: 'terran' | 'gas_giant' | 'desert' | 'ice' | 'volcanic' | 'starbase' | 'moon' | 'anomaly';
+  type: 'terran' | 'gas_giant' | 'desert' | 'ice' | 'volcanic' | 'ocean' | 'starbase' | 'moon' | 'anomaly' | 'nebula' | 'wormhole';
   radius: number;
   position: [number, number, number];
   textureColor: string;
@@ -186,6 +186,17 @@ export interface ShipState {
   combatWaveState?: CombatWaveState;
   adaptiveDifficulty?: AdaptiveCombatMetrics;
   progression?: PlayerProgression;
+
+  // Space Station & Drydock Refit / Rearm
+  isDocked?: boolean;
+  dockedStationId?: string;
+  dockedStationName?: string;
+  canDockAtStation?: {
+    id: string;
+    name: string;
+    distance: number;
+    systemName?: string;
+  } | null;
 }
 
 export interface CelestialTarget {

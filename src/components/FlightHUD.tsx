@@ -15,7 +15,9 @@ import {
   ChevronDown,
   ChevronUp,
   X,
-  Crosshair as CrosshairIcon
+  Crosshair as CrosshairIcon,
+  Anchor,
+  Rocket,
 } from 'lucide-react';
 
 interface FlightHUDProps {
@@ -24,6 +26,9 @@ interface FlightHUDProps {
   targets: CelestialTarget[];
   onDisengageWarp?: () => void;
   onSummonNextWave?: () => void;
+  onDock?: (stationId?: string) => void;
+  onUndock?: () => void;
+  onToggleNavigation?: () => void;
 }
 
 export const FlightHUD: React.FC<FlightHUDProps> = ({
@@ -31,6 +36,9 @@ export const FlightHUD: React.FC<FlightHUDProps> = ({
   currentView,
   targets,
   onSummonNextWave,
+  onDock,
+  onUndock,
+  onToggleNavigation,
 }) => {
   const [showAdaptiveModal, setShowAdaptiveModal] = useState<boolean>(false);
 
@@ -355,12 +363,12 @@ export const FlightHUD: React.FC<FlightHUDProps> = ({
             <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
             <span>⚡ EVASIVE OVERDRIVE [{Math.ceil(shipState.boostDuration ?? 13)}s]</span>
             <span className="text-cyan-400">·</span>
-            <span>220 KM/S (IMPULSE BOOST)</span>
+            <span>247,000 KM/S (BOOST SURGE)</span>
           </div>
           <div className="flex items-center gap-2 text-[10px] text-cyan-300 font-mono-nums">
             <span>75% Disruptor Deflection</span>
             <span>·</span>
-            <span>2x Thruster Agility</span>
+            <span>2.5x Agility & Thruster Burst</span>
           </div>
           {/* Dynamic Depletion Bar */}
           <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden mt-0.5">
@@ -369,6 +377,76 @@ export const FlightHUD: React.FC<FlightHUDProps> = ({
               style={{ width: `${Math.max(0, Math.min(100, ((shipState.boostDuration ?? 13) / 13) * 100))}%` }}
             />
           </div>
+        </div>
+      )}
+
+      {/* EMERGENCY ESCAPE PROTOCOL ACTION (Crucial when Hull / Shields are low or under heavy enemy attack) */}
+      {((shipState.shieldIntegrity < 50 && shipState.shieldsRaised) || !shipState.shieldsRaised || shipState.hullIntegrity < 65 || shipState.lockedEnemy) &&
+        !shipState.isDocked &&
+        !shipState.isWarping && (
+          <div className="absolute top-24 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-2xl bg-red-950/90 border-2 border-red-500 text-center shadow-[0_0_35px_rgba(239,68,68,0.7)] flex items-center gap-3 pointer-events-auto animate-pulse">
+            <div className="flex items-center gap-1.5 text-red-200 font-trek font-bold text-xs uppercase tracking-wider">
+              <span className="w-2 h-2 rounded-full bg-red-400 animate-ping" />
+              <span>DEFENSIVE ALERT: {shipState.hullIntegrity < 50 ? 'HULL COMPROMISED' : 'HOSTILE FIRE'}</span>
+            </div>
+            <button
+              onClick={onToggleNavigation}
+              className="px-3 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white font-trek font-bold text-xs uppercase tracking-wide transition-all shadow-md flex items-center gap-1.5 border border-red-400"
+              title="Open Emergency Course Plotter Menu to flee enemy ships [N key]"
+            >
+              <Rocket className="w-3.5 h-3.5 text-white" />
+              <span>ESCAPE: SET COURSE [N]</span>
+            </button>
+          </div>
+        )}
+
+      {/* SPACE STATION DOCKING PROXIMITY BANNER (Repair & Refill Opportunity) */}
+      {!shipState.isDocked && shipState.canDockAtStation && (
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-30 px-5 py-2.5 rounded-2xl bg-slate-950/95 border-2 border-cyan-400 text-center shadow-[0_0_35px_rgba(6,182,212,0.7)] flex flex-col sm:flex-row items-center gap-3 pointer-events-auto">
+          <div className="flex items-center gap-2 text-cyan-300 font-trek font-bold text-xs uppercase tracking-wider">
+            <Anchor className="w-4 h-4 text-cyan-400 animate-bounce" />
+            <span>
+              {shipState.canDockAtStation.name} IN RANGE ({shipState.canDockAtStation.distance} KM)
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-mono-nums text-slate-300 hidden md:inline">
+              100% Hull Repair & Torpedo Refill
+            </span>
+            <button
+              onClick={() => onDock?.(shipState.canDockAtStation?.id)}
+              className="px-3 py-1 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-trek font-bold text-xs uppercase tracking-wide transition-all shadow-md flex items-center gap-1.5"
+            >
+              <span>⚓ DOCK NOW [X]</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* STARSHIP SECURELY DOCKED STATUS BANNER */}
+      {shipState.isDocked && (
+        <div className="absolute top-24 left-1/2 -translate-x-1/2 z-30 px-6 py-3 rounded-2xl bg-slate-950/95 border-2 border-emerald-400 text-center shadow-[0_0_40px_rgba(16,185,129,0.7)] flex flex-col items-center gap-1.5 pointer-events-auto">
+          <div className="text-xs font-trek text-emerald-300 font-bold uppercase tracking-widest flex items-center gap-2">
+            <Anchor className="w-4 h-4 text-emerald-400" />
+            <span>SECURELY MOORED: {shipState.dockedStationName || 'ORBITAL SPACEDOCK'}</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+          </div>
+
+          <div className="text-[11px] font-mono-nums text-emerald-100/90 flex flex-wrap items-center justify-center gap-2">
+            <span className="text-emerald-400 font-bold">✓ Hull Repaired: 100%</span>
+            <span>·</span>
+            <span className="text-emerald-400 font-bold">✓ Shields: 100%</span>
+            <span>·</span>
+            <span className="text-cyan-300 font-bold">✓ Photon Torpedoes: 30/30 (Rearmed)</span>
+          </div>
+
+          <button
+            onClick={onUndock}
+            className="mt-1 px-4 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-trek font-bold text-xs uppercase tracking-wider transition-all shadow-sm flex items-center gap-1.5"
+          >
+            <span>DISENGAGE MOORINGS / UNDOCK [X]</span>
+          </button>
         </div>
       )}
 
@@ -514,10 +592,18 @@ export const FlightHUD: React.FC<FlightHUDProps> = ({
 
           <div className="flex items-center justify-between">
             <span className="text-slate-400">Velocity:</span>
-            <span className="text-slate-100 font-semibold">
+            <span
+              className={`font-semibold ${
+                shipState.isBoostActive
+                  ? 'text-cyan-300 font-bold animate-pulse'
+                  : 'text-slate-100'
+              }`}
+            >
               {shipState.isWarping
                 ? `${(Math.pow(shipState.warpFactor, 2.5) * 8.5).toFixed(1)} c (Lightspeed)`
-                : `${shipState.speed.toLocaleString()} km/s`}
+                : `${shipState.speed.toLocaleString()} km/s${
+                    shipState.isBoostActive ? ' [⚡ BOOST]' : ''
+                  }`}
             </span>
           </div>
 
